@@ -17,8 +17,9 @@ def encode_image(image_file, text_file, lsb_bits):
 
     # Read the text file and convert to binary
     # Add a null character as a delimiter,
-    # need this to prevent the decoder from adding random text garbage from final output
-    text = text_file.read().decode('utf-8') + '\x00'
+    # need this to prevent the decoder from adding random text garbage from final outputg
+    text_file.seek(0)
+    text = text_file.read().decode('ascii', 'ignore') + '\x00'
     text_bin = text_to_bin(text)
 
     # calulating the total no. of pixels (divide by 3 because each pixel has 3 channels i.e RGB)

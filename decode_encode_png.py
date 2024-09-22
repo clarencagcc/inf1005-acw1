@@ -29,15 +29,15 @@ def png_encode(image_path: str, message: str, lsb_bits=1):
     if lsb_bits > 8:
         lsb_bits = 8
 
+    pixels = image.getdata()
     # Check if we have enough bytes to hide the message
     bytes_needed = math.ceil(len(binary_message) / lsb_bits)
     if bytes_needed > len(image.getdata()) * 3:
         return False
 
     message_index = 0
-
     new_pixels = []
-    for pixel in list(image.getdata()):
+    for pixel in pixels:
         if message_index < binary_message_len:
             new_pixel = list(pixel)
 
@@ -45,15 +45,17 @@ def png_encode(image_path: str, message: str, lsb_bits=1):
             for i in range(3):  # Loop through RGB channels
                 if message_index < binary_message_len:
                     # code for testing
-                    # if i == 1:
-                    #     new_pixel[i] = 255
 
                     bits_to_encode = binary_message[message_index: message_index + lsb_bits]
+                    # If there are not enough characters in the binary
+                    # add 0s from the left
                     if len(bits_to_encode) < lsb_bits:
                         bits_to_encode = bits_to_encode.ljust(lsb_bits, '0')
 
                     # get pixel in 8 bit binary
                     pixel_value_binary = format(new_pixel[i], '08b')
+
+                    # get the binary data of the original pixel based on the size of
                     if lsb_bits == 8:
                         new_pixel[i] = int(bits_to_encode, 2)
                     else:
