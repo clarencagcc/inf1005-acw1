@@ -247,6 +247,7 @@ def decode_section():
                     for lsb in range(1, 9):
                         decoded_content = wav_decode(encoded_file, lsb)
                         decoded_messages[lsb] = decoded_content
+                        encoded_file = io.BytesIO(encoded_file.getvalue()) 
                     # Rank and display the results
                     ranked_messages = rank_decoded_messages(decoded_messages)
                     for bits, message, count in ranked_messages:
@@ -256,15 +257,23 @@ def decode_section():
                     st.write(f"Error decoding WAV file: {e}")    
 
 def rank_decoded_messages(decoded_messages):
-    """Rank decoded messages based on the count of alphanumeric characters."""
+    """Rank decoded messages based on the percentage of alphanumeric characters."""
     rankings = []
     
     for bits, message in decoded_messages.items():
-        # Count alphanumeric characters
+        # Calculate total length and alphanumeric count
+        total_length = len(message)
         alphanumeric_count = sum(c.isalnum() for c in message)
-        rankings.append((bits, message, alphanumeric_count))
+        
+        # Calculate percentage, avoiding division by zero
+        if total_length > 0:
+            percentage = (alphanumeric_count / total_length) * 100
+        else:
+            percentage = 0
+        
+        rankings.append((bits, message, percentage))
     
-    # Sort based on alphanumeric count (descending order)
+    # Sort based on percentage (descending order)
     rankings = sorted(rankings, key=lambda x: x[2], reverse=True)
     
     return rankings
