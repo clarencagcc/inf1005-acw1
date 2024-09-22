@@ -211,7 +211,7 @@ def decode_section():
     decode_slider = st.slider("LSB bits used for encoding.", min_value=1, max_value=8, value=2, key='decode-slider')
 
     if encoded_file:
-        if st.button("Decode File", key='decode-button'):
+        if st.button("Decode File with selected LSB", key='decode-button'):
             extension = encoded_file.type.split('/')[1]
             if extension == "png":
                 decoded_content = png_decode(encoded_file, decode_slider)
@@ -222,3 +222,49 @@ def decode_section():
                     st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
                 except Exception as e:
                     st.write(f"Error decoding WAV file: {e}")
+
+        if st.button("Decode File (guess LSB)", key='decode-button-guess'):
+            extension = encoded_file.type.split('/')[1]
+            decoded_messages = {}  # To store results for each LSB level
+
+            if extension == "png":
+                try:
+                    # Attempt decoding from 1 to 8 LSBs for PNG
+                    for lsb in range(1, 9):
+                        decoded_content = png_decode(encoded_file, lsb)
+                        decoded_messages[lsb] = decoded_content
+                    # Rank and display the results
+                    ranked_messages = rank_decoded_messages(decoded_messages)
+                    for bits, message, count in ranked_messages:
+                        st.write(f"Decoded using {bits} LSBs (Alphanumeric Count: {count})")
+                        st.text_area(f"Decoded Content (LSB {bits}):", message, height=MAX_TEXT_HEIGHT)
+                except Exception as e:
+                    st.write(f"Error decoding PNG file: {e}")
+
+            elif extension == "wav":
+                try:
+                    # Attempt decoding from 1 to 8 LSBs for WAV
+                    for lsb in range(1, 9):
+                        decoded_content = wav_decode(encoded_file, lsb)
+                        decoded_messages[lsb] = decoded_content
+                    # Rank and display the results
+                    ranked_messages = rank_decoded_messages(decoded_messages)
+                    for bits, message, count in ranked_messages:
+                        st.write(f"Decoded using {bits} LSBs (Alphanumeric Count: {count})")
+                        st.text_area(f"Decoded Content (LSB {bits}):", message, height=MAX_TEXT_HEIGHT)
+                except Exception as e:
+                    st.write(f"Error decoding WAV file: {e}")    
+
+def rank_decoded_messages(decoded_messages):
+    """Rank decoded messages based on the count of alphanumeric characters."""
+    rankings = []
+    
+    for bits, message in decoded_messages.items():
+        # Count alphanumeric characters
+        alphanumeric_count = sum(c.isalnum() for c in message)
+        rankings.append((bits, message, alphanumeric_count))
+    
+    # Sort based on alphanumeric count (descending order)
+    rankings = sorted(rankings, key=lambda x: x[2], reverse=True)
+    
+    return rankings
