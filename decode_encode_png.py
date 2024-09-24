@@ -44,21 +44,18 @@ def png_encode(image_path: str, message: str, lsb_bits=1):
             # Replace the least significant bit of the red, green, or blue channel with message bits
             for i in range(3):  # Loop through RGB channels
                 if message_index < binary_message_len:
-                    # code for testing
-
                     bits_to_encode = binary_message[message_index: message_index + lsb_bits]
                     # If there are not enough characters in the binary
                     # add 0s from the left
                     if len(bits_to_encode) < lsb_bits:
                         bits_to_encode = bits_to_encode.ljust(lsb_bits, '0')
 
-                    # get pixel in 8 bit binary
-                    pixel_value_binary = format(new_pixel[i], '08b')
-
-                    # get the binary data of the original pixel based on the size of
+                    # get the binary data of the original pixel based on the size of the data we are encoding
                     if lsb_bits == 8:
                         new_pixel[i] = int(bits_to_encode, 2)
                     else:
+                        # get pixel in 8 bit binary
+                        pixel_value_binary = format(new_pixel[i], '08b')
                         pixel_value_binary = pixel_value_binary[:-lsb_bits] + bits_to_encode
                         # convert updated string back to int
                         new_pixel[i] = int(pixel_value_binary, 2)
@@ -93,7 +90,6 @@ def png_decode(image_path: str, bits=1):
     binary_message = ""
     for pixel in image.getdata():
         for i in range(3):  # Extract from RGB channels
-            binary_value = format(pixel[i], "08b")
             # Extract the least significant 'bits' from the pixel value using binary operations
             bits_value = pixel[i] & (2 ** bits - 1)
             binary_message += format(bits_value, f'0{bits}b')

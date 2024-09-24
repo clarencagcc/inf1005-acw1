@@ -54,7 +54,7 @@ def flac_encode(input_path, output_path, message, lsb_bits):
 
     # Write the modified data to a new FLAC file
     sf.write(output_path, reshaped_data, samplerate)
-    print(f"Message encoded into {output_path}.")
+    return True
 
 
 def bin_to_message(binary_data: str):
