@@ -19,7 +19,7 @@ def png_encode(image_path: str, message: str, lsb_bits=1):
     """Encodes a message into the PNG image."""
     image = Image.open(image_path)
     # image must be in RGB mode  may not be in RGB
-    image = image.convert('RGB')
+    image = image.convert('RGBA')
 
     message += message_delimiter  # Use ### as a delimiter for the end of the message
     binary_message = message_to_bin(message)
@@ -85,7 +85,7 @@ def bin_to_message(binary_data: str):
 def png_decode(image_path: str, bits=1):
     """Extract the hidden message from the PNG image."""
     image = Image.open(image_path)
-    image = image.convert('RGB')
+    image = image.convert('RGBA')
 
     binary_message = ""
     for pixel in image.getdata():

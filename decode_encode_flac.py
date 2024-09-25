@@ -36,15 +36,12 @@ def flac_encode(input_path, output_path, message, lsb_bits):
     for i in range(len(flat_data)):
         if bits_encoded >= total_bits:
             break
-        temp = flat_data[i]
-
         # Extract the current 'lsb_bits' from the message
         bits_to_encode = binary_message[bits_encoded: bits_encoded + lsb_bits]
         bits_to_encode_int = int(bits_to_encode, 2)
 
         # Clear the LSBs of the sample and then embed the new bits using binary OR
         flat_data[i] = (flat_data[i] & ~(2**lsb_bits - 1)) | bits_to_encode_int
-        temp = flat_data[i]
 
         # Update the number of bits encoded
         bits_encoded += lsb_bits
@@ -97,17 +94,18 @@ def flac_decode(input_path, lsb_bits):
     return decoded_message
 
 
-# Example usage
-input_flac = 'input/ohdeer.flac'
-output_flac = 'output/ohdeer.flac'
-secret_message = get_text_from_file("payload/small.txt")
+if __name__ == "__main__":
+    # Example usage
+    input_flac = 'input/ohdeer.flac'
+    output_flac = 'output/ohdeer.flac'
+    secret_message = get_text_from_file("payload/small.txt")
 
-# Embed the secret message
-flac_encode(input_flac, output_flac, secret_message, lsb_bits=8)
+    # Embed the secret message
+    flac_encode(input_flac, output_flac, secret_message, lsb_bits=8)
 
-# Example usage:
-message_length = 13  # Known length of the hidden message
-decoded_message = flac_decode(output_flac, lsb_bits=8)
-print(f"Decoded message: {decoded_message}")
+    # Example usage:
+    message_length = 13  # Known length of the hidden message
+    decoded_message = flac_decode(output_flac, lsb_bits=8)
+    print(f"Decoded message: {decoded_message}")
 
 

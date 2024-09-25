@@ -1,7 +1,19 @@
 import cv2
+import os
 import math
+import subprocess
 
 message_delimiter = "\x00"
+
+def delete_file(input_path):
+    # Delete the audio file
+    try:
+        os.remove(input_path)
+        print(f"Temporary file {input_path} deleted successfully.")
+    except OSError as e:
+        print(f"Unable to delete {input_path}. Error: {e}")
+        pass
+
 
 def get_text_from_file(path: str):
     try:
@@ -15,7 +27,15 @@ def message_to_bin(message: str):
     return ''.join(format(ord(c), '08b') for c in message)
 
 def mkv_encode(input_path, output_path, message, lsb_bits=1):
-    print("MKV Encoding")
+    print(f"\nEncoding to {output_path}")
+    # Extract audio file from original video file using ffmpeg
+    # We'll save the audio as a temp file which we'll delete after all is said and done
+    temp_audio_path = "input/temp.aac"
+    command = f"ffmpeg -y -i {input_path} -vn -acodec copy {temp_audio_path}"
+    subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    soundless_video_path = output_path.replace(".mkv", "_temp.mkv")
+
     # Open video file
     cap = cv2.VideoCapture(input_path)
 
@@ -30,21 +50,18 @@ def mkv_encode(input_path, output_path, message, lsb_bits=1):
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     max_pixel = frame_count * width * height
-    print("max pixel:", max_pixel)
 
     # Create a video writer to save the modified video using FFV1 (lossless)
     fourcc = cv2.VideoWriter_fourcc(*'FFV1')  # Use lossless FFV1 codec
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    out = cv2.VideoWriter(soundless_video_path, fourcc, fps, (width, height))
 
     bytes_needed = math.ceil(len(binary_message) / lsb_bits)
     if bytes_needed > frame_count * width * height:
         return False
 
     curr_frame = 0
+    pixel_count = 1
     while cap.isOpened():
-        if curr_frame % 100 == 0:
-            print(f"{curr_frame} of {frame_count}")
-
         curr_frame += 1
         ret, frame = cap.read()
         if not ret:
@@ -52,6 +69,7 @@ def mkv_encode(input_path, output_path, message, lsb_bits=1):
 
         for i in range(height):
             for j in range(width):
+                pixel_count += 1
                 # Leave the loop if we have oth
                 if payload_index < binary_message_len:
                     # Get the bits that we will be appending to the current binary value
@@ -81,6 +99,14 @@ def mkv_encode(input_path, output_path, message, lsb_bits=1):
     cap.release()
     out.release()
 
+    # Combine audio with video
+    command = f"ffmpeg -y -i {soundless_video_path} -i {temp_audio_path} -c:v copy -c:a aac {output_path}"
+    subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # delete the temp files
+    delete_file(temp_audio_path)
+    delete_file(soundless_video_path)
+
+    print("MKV Encoding End\b")
     return True
 
 def bin_to_message(binary_data):
@@ -95,8 +121,6 @@ def bin_to_message(binary_data):
     return message
 
 def mkv_decode(input_path, lsb_bits=1):
-    print("MKV Decoding")
-    # Open the video file
     cap = cv2.VideoCapture(input_path)
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -135,15 +159,16 @@ def mkv_decode(input_path, lsb_bits=1):
 
     return final_message
 
+
 if __name__ == "__main__":
     input_path = "input/comeon.mkv"
     output_path = "output/comeon.mkv"
-    payload_path = "payload/large.txt"
+    payload_path = "payload/small.txt"
     message = get_text_from_file(payload_path)
 
     mkv_encode(input_path, output_path, message, lsb_bits=8)
 
     decoded = mkv_decode(output_path, lsb_bits=8)
-    print(decoded)
+    #print(decoded)
 
 
