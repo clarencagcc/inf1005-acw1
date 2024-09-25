@@ -1,129 +1,130 @@
+from stegano import lsb
 import cv2
-import numpy as np
-import tempfile
 import os
-import subprocess
+import numpy as np
+from os.path import join
+from PIL import Image
+from moviepy.editor import VideoFileClip, ImageSequenceClip
 
-def list_ffmpeg_streams(video_path):
-    command = f"ffmpeg -i {video_path} -hide_banner"
-    result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output = result.stderr.decode()
-    print("FFmpeg stream information:")
-    print(output)
+def convert_to_lossless_format(video_file, output_format="AVI"):
+    """
+    Converts the input video file to the specified lossless format (AVI with FFV1, MOV with Apple Animation or FFV1).
+    """
+    temp_dir = "temp_frames_lossless"
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
 
-def encode_video_with_cv2(video_file, text_file, output_path, lsb_bits=1):
-    # Create a temporary file to store the uploaded video
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video_file:
-        temp_video_file.write(video_file.read())  # Write the video bytes to a temp file
-        temp_video_path = temp_video_file.name
-    
-    # List all streams in the video file (diagnostic step)
-    list_ffmpeg_streams(temp_video_path)
+    # Open the input video file with OpenCV
+    video_capture = cv2.VideoCapture(video_file)
+    if not video_capture.isOpened():
+        raise Exception(f"Failed to open the video file {video_file}")
 
-    # Extract audio from the original video using FFmpeg
-    audio_path = temp_video_path.replace('.mp4', '_audio.aac')
-    extract_audio_command = f"ffmpeg -i {temp_video_path} -vn -acodec copy {audio_path} -y"
-    
-    result = subprocess.run(extract_audio_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    
-    if result.returncode != 0:
-        print(f"FFmpeg audio extraction failed: {result.stderr.decode()}")
-        audio_path = None  # No audio extracted, set to None to skip audio merging
+    frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    frame_width = int(video_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = video_capture.get(cv2.CAP_PROP_FPS)
+
+    # Conversion to AVI using FFV1 codec
+    if output_format == "AVI":
+        fourcc = cv2.VideoWriter_fourcc(*'FFV1')  # FFV1 codec for lossless AVI
+        output_file = join(temp_dir, "lossless_video.avi")
+        video_writer = cv2.VideoWriter(output_file, fourcc, fps, (frame_width, frame_height))
+
+        for frame_num in range(frame_count):
+            ret, frame = video_capture.read()
+            if not ret:
+                break
+            video_writer.write(frame)  # Write frame directly to the AVI file
+
+        video_capture.release()
+        video_writer.release()
+        return output_file  # Return the path to the AVI file
+
+    # Conversion to MOV using Apple Animation codec (or FFV1 if desired)
+    elif output_format == "MOV":
+        fourcc = cv2.VideoWriter_fourcc(*'png ')  # Apple Animation codec for MOV
+        output_file = join(temp_dir, "lossless_video.mov")
+        video_writer = cv2.VideoWriter(output_file, fourcc, fps, (frame_width, frame_height))
+
+        for frame_num in range(frame_count):
+            ret, frame = video_capture.read()
+            if not ret:
+                break
+            video_writer.write(frame)  # Write frame directly to the MOV file
+
+        video_capture.release()
+        video_writer.release()
+        return output_file  # Return the path to the MOV file
+
     else:
-        print(f"Audio successfully extracted to {audio_path}")
+        raise ValueError(f"Unsupported lossless format: {output_format}")
 
-    cap = cv2.VideoCapture(temp_video_path)
-    
-    if not cap.isOpened():
-        print("Error: Could not open video.")
-        return
-    
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    # Load the text file and convert it to binary
-    text_content = text_file.read().decode()  # Convert from byte to string
-    text_bin = ''.join([format(ord(char), '08b') for char in text_content]) + '1' * lsb_bits  # End signal
+def encode_video_with_cv2(video_file, text_file, output_path, lsb_bits=1, selected_format="AVI"):
+    """
+    Converts the video to a lossless format (AVI or MOV) and embeds text into the video frames using LSB steganography.
+    """
+    # Convert the video to the selected lossless format
+    print(f"Converting {video_file} to lossless {selected_format} format...")
+    lossless_path = convert_to_lossless_format(video_file, output_format=selected_format)
 
-    bits_per_frame = frame_width * frame_height * 3 * lsb_bits
-    total_bits = len(text_bin)
+    # Open the converted video (AVI or MOV) and extract frames
+    video_capture = cv2.VideoCapture(lossless_path)
+    frames = []
+    fps = video_capture.get(cv2.CAP_PROP_FPS)
 
-    total_capacity = total_frames * bits_per_frame
-    if total_bits > total_capacity:
-        print("Error: Text file is too large to embed in this video.")
-        return
+    # Read the text payload
+    with open(text_file, 'r') as f:
+        payload = f.read()
 
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
+    text_index = 0
+    total_chars = len(payload)
 
-    data_index = 0
-    data_len = len(text_bin)
-    
-    print("Starting video encoding...")
-
-    for frame_idx in range(total_frames):
-        ret, frame = cap.read()
+    frame_num = 0
+    while video_capture.isOpened():
+        ret, frame = video_capture.read()
         if not ret:
             break
-        
-        # Flatten the frame to access pixel values
-        flat_frame = frame.flatten()
 
-        # Embed the text binary data into the frame, up to the capacity of the frame
-        for i in range(0, len(flat_frame)):
-            if data_index < data_len:
-                # Extract multiple bits from the text and embed them into the pixel
-                bits_to_embed = text_bin[data_index:data_index + lsb_bits]
-                if len(bits_to_embed) < lsb_bits:
-                    bits_to_embed = bits_to_embed.ljust(lsb_bits, '0')
-                
-                # Embed bits in pixel's least significant bits
-                flat_frame[i] = (flat_frame[i] & ~((1 << lsb_bits) - 1)) | int(bits_to_embed, 2)
+        # Convert the frame to PIL format for embedding
+        frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
-                # Print encoded character and its byte only when a new character starts
-                if data_index % (lsb_bits * 8) == 0:
-                    char_index = data_index // (lsb_bits * 8)
-                    if char_index < len(text_content):
-                        char = text_content[char_index]
-                        char_bin = format(ord(char), '08b')
-                        print(f"Encoding character '{char}' with byte '{char_bin}' in frame {frame_idx + 1}/{total_frames}")
+        if text_index < total_chars:
+            text_segment = payload[text_index:text_index + lsb_bits]
+            text_index += lsb_bits
+            print(f"Embedding '{text_segment}' into frame {frame_num}")
 
-                data_index += lsb_bits
-            else:
+            try:
+                encoded_frame_pil = lsb.hide(frame_pil, text_segment)
+                encoded_frame = np.array(encoded_frame_pil)
+                frame = cv2.cvtColor(encoded_frame, cv2.COLOR_RGB2BGR)
+            except Exception as e:
+                print(f"Error encoding frame {frame_num}: {e}")
                 break
 
-        # Reshape the frame back and write it to the output video
-        encoded_frame = flat_frame.reshape((frame_height, frame_width, 3))
-        out.write(encoded_frame)
+        # Append the modified frame to the frame list
+        frames.append(frame)
+        frame_num += 1
 
-        # If data is fully embedded, continue to the next frame
-        if data_index >= data_len:
-            continue  # Continue to the next frame if data remains
+    video_capture.release()
 
-    cap.release()
-    out.release()
-
-    if audio_path:
-        final_output_path = output_path.replace('.mp4', '_with_audio.mp4')
-        combine_audio_command = f"ffmpeg -i {output_path} -i {audio_path} -c copy {final_output_path} -y"
-        result = subprocess.run(combine_audio_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
-        if result.returncode != 0:
-            print(f"FFmpeg audio merging failed: {result.stderr.decode()}")
-        else:
-            print(f"Audio successfully merged into {final_output_path}")
-    else:
-        final_output_path = output_path
-        print("No audio to merge with the final video.")
-
+    # Create a final video using MoviePy from the processed frames and add audio back
     try:
-        os.remove(temp_video_path)
-        if audio_path:
-            os.remove(audio_path)
-    except PermissionError:
-        print(f"File {temp_video_path} is still in use, trying again later.")
+        video_clip = ImageSequenceClip([cv2.cvtColor(f, cv2.COLOR_BGR2RGB) for f in frames], fps=fps)
+        original_clip = VideoFileClip(video_file)
 
-    print(f"Encoding complete. Final video saved as {final_output_path}")
+        if original_clip.audio:
+            print("Adding audio back to the encoded video...")
+            video_with_audio = video_clip.set_audio(original_clip.audio)
+            final_output_path = f"{output_path}_with_audio.{selected_format.lower()}"
+            video_with_audio.write_videofile(final_output_path, codec="ffv1" if selected_format == "AVI" else "png", preset="ultrafast")
+            return final_output_path
+        else:
+            print("No audio found in the original video.")
+    except Exception as e:
+        print(f"Error adding audio or writing video: {e}")
+
+    # If no audio, write the final video without audio
+    final_output_path = f"{output_path}.{selected_format.lower()}"
+    video_clip.write_videofile(final_output_path, codec="ffv1" if selected_format == "AVI" else "png", preset="ultrafast")
     return final_output_path
