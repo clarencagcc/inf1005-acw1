@@ -105,12 +105,14 @@ def mkv_encode(input_path, output_path, message, lsb_bits=1):
 
     # Combine audio with video
     command = f"ffmpeg -y -i {soundless_video_path} -i {temp_audio_path} -c:v copy -c:a aac {output_path}"
-    subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    #command = f"ffmpeg -y -i {soundless_video_path} -c:v copy -c:a aac {output_path}"
+    #subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    subprocess.run(command, shell=True)
     # delete the temp files
     delete_file(temp_audio_path)
     delete_file(soundless_video_path)
 
-    print(f"Pixels Edited: {pixel_edited_count}")
+    print(f"Pixels Edited: {pixel_edited_count}/{pixel_count}")
     print("MKV Encoding End\b")
     return True
 

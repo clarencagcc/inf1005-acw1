@@ -13,6 +13,15 @@ from decodeVideo import decode_video_with_cv2
 from encoder import encode_image
 from audio_spectrogram import plot_spectrogram
 
+from PIL import Image
+from pydub import AudioSegment
+import moviepy.editor as mp
+
+MAX_IMAGE_HEIGHT = 400
+MAX_TEXT_HEIGHT = 400
+
+from pydub.utils import which
+AudioSegment.converter = which("ffmpeg")
 
 def create_temp_file(mkv_file):
     # Create a temporary file with a unique path
@@ -23,13 +32,41 @@ def create_temp_file(mkv_file):
         temp_file_path = temp_file.name
         return temp_file_path
 
-def convert_cover_to_selected_format(cover_file, selected_format):
-    print(cover_file.name)
-    print(selected_format)
-    pass
 
-MAX_IMAGE_HEIGHT = 400
-MAX_TEXT_HEIGHT = 400
+def convert_cover_to_selected_format(cover_file, selected_format):
+    cover_extension = cover_file.type.split('/')[-1]
+    selected_format = selected_format.lower()
+    # Create a temporary file to store the converted output
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{selected_format}") as temp_output:
+        output_path = temp_output.name
+        temp_output.flush()
+
+        try:
+            # Handle image conversion
+            if cover_file.type in ["image/jpg", "image/png", "image/jpeg", "image/webp"]:
+                img = Image.open(cover_file)
+                img.save(output_path, selected_format.upper())
+
+            # Handle audio conversion
+            elif cover_file.type in ["audio/wav", "audio/flac"]:
+                audio = AudioSegment.from_file(cover_file, format=cover_extension)
+                audio.export(output_path, format=selected_format)
+
+            # Handle video conversion
+            elif cover_file.type in ["video/x-matroska", "video/avi", "video/quicktime", "video/mp4"]:
+                video_codec = ""
+                if cover_file.type in ["video/avi", "video/quicktime"]:
+                    video_codec = "ffv1"
+                else:
+                    video_codec = "libx264"
+
+                tempfile_path = create_temp_file(cover_file)
+                clip = mp.VideoFileClip(tempfile_path)
+                clip.write_videofile(output_path, codec=video_codec, audio_codec="aac", preset="ultrafast")
+
+            return output_path
+        except Exception as e:
+            st.error(f"convert_cover_to_selected_format() Error: {e}")
 
 def encode_section_choose_files():
     # Use columns to make the layout cleaner
@@ -52,28 +89,37 @@ def encode_section_choose_files():
         st.subheader("Cover")
         cover_file = st.file_uploader("Drag and drop file here", type=["jpg", "png", "jpeg", 'webp',
                                                                        "wav", "flac",
-                                                                       "mkv", 'avi', 'mov'], key="cover")
+                                                                       "mkv", 'avi', 'mov', "mp4"], key="cover")
         if cover_file:
             # uncomment this line to see what your file type is
             # st.write("Type: ", cover_file.type)
             if cover_file.type in ["image/jpg", "image/png", "image/jpeg", "image/webp"]:
                 output_format = ['PNG']
                 st.image(cover_file, width=MAX_IMAGE_HEIGHT)
-            elif cover_file.type in ["audio/wav", "audio/flac"]:
+
+            elif cover_file.type in ["audio/wav"]:
                 output_format = ['FLAC', 'WAV']
                 spectrogram_image = plot_spectrogram(cover_file)
                 st.image(spectrogram_image, caption=f"Spectrogram")
                 st.audio(cover_file)
-            elif cover_file.type in ["video/x-matroska"]:
+
+            elif cover_file.type in ["audio/flac"]:
+                output_format = ['FLAC', 'WAV']
+                spectrogram_image = plot_spectrogram(cover_file)
+                st.image(spectrogram_image, caption=f"Spectrogram")
+                st.audio(cover_file)
+
+            elif cover_file.type in ["video/x-matroska", "video/avi", "video/quicktime", "video/mp4"]:
                 output_format = ['MKV', "AVI", "MOV"]  # Lossless formats for encoding
-                st.video(cover_file)
+                preview_file = convert_cover_to_selected_format(cover_file, "mp4")
+                st.video(preview_file)
 
             selected_format = st.selectbox("Select the output format", output_format)
 
     return cover_file, payload_file, selected_format
 
 
-def encode_section_single_encode(cover_file, payload_file, encode_slider):
+def encode_section_single_encode(cover_file, payload_file, encode_slider, selected_format):
     col1, col2 = st.columns(2)
 
     # Move the pointer back to the start of the file so that we can read it again from the beginning
@@ -82,6 +128,11 @@ def encode_section_single_encode(cover_file, payload_file, encode_slider):
     filename = cover_file.name.split('.')[0]
     extension = cover_file.type.split('/')[-1]
 
+    # Convert file to selected format
+    cover_file.seek(0)
+    tempfile = convert_cover_to_selected_format(cover_file, selected_format)
+    selected_format = selected_format.lower()
+
     output_path = ""
     output = None
 
@@ -89,46 +140,50 @@ def encode_section_single_encode(cover_file, payload_file, encode_slider):
     with col1:
         #st.write(extension)
         if st.button("Encode using selected LSB", key="encode-button"):
-            if extension in ["png", "webp"]:
-                output = png_encode(cover_file, payload_content, encode_slider)
+            if selected_format in ["png", "webp"]:
+                output = png_encode(tempfile, payload_content, encode_slider)
                 try:
                     # Save image to local storage to download the file
-                    output_path = f"output/{filename}.{encode_slider}.{extension}"
+                    output_path = f"output/{filename}.{encode_slider}.{selected_format}"
                     output.save(output_path, loessless=True)
                 except Exception as e:
                     output_path = ""
-                    st.write(f"Error encoding PNG/WEBP file: {e}")
-            elif extension in ["jpg", "jpeg"]:
-                output = encode_image(cover_file, payload_file, encode_slider)
+                    st.error(f"Cover file may be too small.")
+                    st.error(f"Error encoding PNG/WEBP file: {e}")
+            elif selected_format in ["jpg", "jpeg"]:
+                output = encode_image(tempfile, payload_file, encode_slider)
                 try:
                     # Save image to local storage to download the file
                     output_path = f"output/{filename}.{encode_slider}.png"
                     output.save(output_path)
                 except Exception as e:
                     output_path = ""
-                    st.write(f"Error encoding JPEG file: {e}")
-            elif extension in "flac":
+                    st.error(f"Cover file may be too small.")
+                    st.error(f"Error encoding JPEG file: {e}")
+            elif selected_format in "flac":
                 try:
                     output_path = f"output/{filename}.{encode_slider}.flac"
-                    flac_encode(cover_file, output_path, payload_content, encode_slider)
+                    flac_encode(tempfile, output_path, payload_content, encode_slider)
                 except Exception as e:
                     output_path = ""
-                    st.write(f"Error encoding FLAC file: {e}")
-            elif extension == "wav":
+                    st.error(f"Cover file may be too small.")
+                    st.error(f"Error encoding FLAC file: {e}")
+            elif selected_format == "wav":
                 try:
                     output_path = f"output/{filename}.{encode_slider}.wav"
-                    wav_encode(cover_file, payload_content, output_path, encode_slider)
+                    wav_encode(tempfile, payload_content, output_path, encode_slider)
                 except Exception as e:
                     output_path = ""
-                    st.write(f"Error encoding WAV file: {e}")
-            elif extension == "x-matroska":
+                    st.error(f"Cover file may be too small.")
+                    st.error(f"Error encoding WAV file: {e}")
+            elif selected_format == "mkv":
                 try:
                     output_path = f"output/{filename}.{encode_slider}.mkv"
-                    mkv_path = create_temp_file(cover_file)
-                    mkv_encode(mkv_path, output_path, payload_content, encode_slider)
+                    mkv_encode(tempfile, output_path, payload_content, encode_slider)
                 except Exception as e:
                     output_path = ""
-                    st.write(f"Error encoding MKV file: {e}")
+                    st.error(f"Cover file may be too small.")
+                    st.error(f"Error encoding MKV file: {e}")
 
     # Download Button
     with col2:
@@ -153,19 +208,23 @@ def encode_section_single_preview(cover_file, output, output_path):
             with col2:
                 st.subheader("Encoded")
                 st.image(output, width=MAX_IMAGE_HEIGHT)
-        elif extension in ["wav", "flac"]:
+        elif extension in ["wav", "flac", "mp3"]:
             st.audio(output_path)
         elif extension in ['x-matroska']:
-            st.write("MKV playback not supported.")
+            st.write("MKV playback is unavailable.")
 
-
-def encode_section_multi_encode(cover_file, payload_file):
+def encode_section_multi_encode(cover_file, payload_file, selected_format):
 
     # Move the pointer back to the start of the file so that we can read it again from the beginning
     payload_file.seek(0)
     payload_content = payload_file.read().decode('ascii', 'ignore')
     filename = cover_file.name.split('.')[0]
     extension = cover_file.type.split('/')[-1]
+
+    # Convert file to selected format
+    cover_file.seek(0)
+    tempfile = convert_cover_to_selected_format(cover_file, selected_format)
+    selected_format = selected_format.lower()
 
     # Buttons for downloading multiple encoded files
     col1, col2 = st.columns(2)
@@ -181,69 +240,67 @@ def encode_section_multi_encode(cover_file, payload_file):
             # Save all those generated files to output folder
             # store paths for each file
             # use those paths to generate slideshow
-            if extension in ["png", "webp"]:
+            if selected_format in ["png"]:
                 for i in range(1, 9):
-                    output = png_encode(cover_file, payload_content, i)
+                    output = png_encode(tempfile, payload_content, i)
                     # png_encode will return bool during failure
                     if type(output) == bool:
-                        st.write(f"{i} LSB is too small for this payload.")
+                        st.error(f"{i} LSB is too small for this payload.")
                         continue
                     output_list.append(output)
                     # Save image to local storage to download the file
-                    output_path = f"output/{filename}.{i}.{extension}"
+                    output_path = f"output/{filename}.{i}.png"
                     output.save(output_path)
                     output_paths.append(output_path)
-            elif extension in ["jpg", "jpeg"]:
+            elif selected_format in ["jpg", "jpeg"]:
                 for i in range(1, 9):
                     try:
-                        output = encode_image(cover_file, payload_file, i)
+                        output = encode_image(tempfile, payload_file, i)
                         output_list.append(output)
                         # Save image to local storage to download the file
                         output_path = f"output/{filename}.{i}.png"
                         output.save(output_path)
-                    except Exception:
-                        st.write(f"{i} LSB is too small for this payload.")
-            elif extension == "wav":
+                    except Exception as e:
+                        st.error(f"{i} LSB may be too small for this payload.")
+                        st.error(f"Error: {e}")
+            elif selected_format == "wav":
                 for i in range(1, 9):
+                    output_path = f"output/{filename}.{i}.wav"
+                    # st.write("path done")
+                    cover_file = io.BytesIO(cover_file.getvalue())  # Reset file stream for each loop iteration
                     try:
-                        # st.write(f"Current LSB value: {i} (Type: {type(i)})")
                         output_path = f"output/{filename}.{i}.wav"
-                        # st.write("path done")
-                        cover_file = io.BytesIO(cover_file.getvalue())  # Reset file stream for each loop iteration
-                        # st.write("reset stream")
-                        output = wav_encode(cover_file, payload_content, output_path, i)
+                        output = wav_encode(tempfile, payload_content, output_path, i)
                         output_list.append(output)
                         output_paths.append(output_path)
                     except Exception as e:
-                        st.write(f"Error encoding WAV file: {e}")
-            elif extension == "flac":
+                        st.error(f"{i} LSB may be too small for this payload.")
+                        st.error(f"Error: {e}")
+            elif selected_format == "flac":
                 for i in range(1, 9):
                     try:
-                        # st.write(f"Current LSB value: {i} (Type: {type(i)})")
                         output_path = f"output/{filename}.{i}.flac"
-                        # st.write("path done")
-                        cover_file = io.BytesIO(cover_file.getvalue())  # Reset file stream for each loop iteration
-                        # st.write("reset stream")
-                        output = flac_encode(cover_file, output_path, payload_content, i)
+                        output = flac_encode(tempfile, output_path, payload_content, i)
                         output_list.append(output)
                         output_paths.append(output_path)
                     except Exception as e:
-                        st.write("Cover is too small to store payload.")
-            elif extension == "x-matroska":
+                        st.error(f"{i} LSB may be too small for this payload.")
+                        st.error(f"Error: {e}")
+            elif selected_format == "mkv":
                 for i in range(1, 9):
                     try:
                         st.write(f"Encoding LSB {i}")
                         output_path = f"output/{filename}.{i}.mkv"
-                        mkv_path = create_temp_file(cover_file)
-                        mkv_encode(mkv_path, output_path, payload_content, i)
+                        mkv_encode(tempfile, output_path, payload_content, i)
                         output_paths.append(output_path)
                     except Exception as e:
-                        st.write("Cover is too small to store payload.")
+                        st.error(f"{i} LSB may be too small for this payload.")
+                        st.error(f"Error: {e}")
 
     # Download button
     with col2:
         # Different file types have different render steps
-        if extension in ["png", "jpg", "jpeg", "wav", "flac", "x-matroska"]:
+        if selected_format in ["png", "jpg", "jpeg", "wav", "flac", "x-matroska"]:
             if len(output_paths) > 0:
                 zip_buffer = io.BytesIO()
                 # Add each file (image or wav) to zip folder
@@ -291,7 +348,6 @@ def encode_section_multi_preview(cover_file, output_list, output_paths):
             st.write(f"Total files generated: {mult_encode_output_count}")
 
 
-
 def encode_section():
     # Set the page configuration to use a wide layout
     st.set_page_config(layout="wide")
@@ -303,17 +359,16 @@ def encode_section():
 
     cover_file, payload_file, selected_format = encode_section_choose_files()
 
-
     # Slider for selecting the number of LSB bits
     st.markdown("### LSB Bit Selection")
     encode_slider = st.slider("LSB bits used for encoding.", min_value=1, max_value=8, value=2, key='encode-slider')
 
     # Only show the button if there is already a cover_file and a payload_file
     if cover_file and payload_file:
-        output_path, output = encode_section_single_encode(cover_file, payload_file, encode_slider)
+        output_path, output = encode_section_single_encode(cover_file, payload_file, encode_slider, selected_format)
         encode_section_single_preview(cover_file, output, output_path)
 
-        output_list, output_path = encode_section_multi_encode(cover_file, payload_file)
+        output_list, output_path = encode_section_multi_encode(cover_file, payload_file, selected_format)
         encode_section_multi_preview(cover_file, output_list, output_path)
 
 
