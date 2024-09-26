@@ -2,12 +2,31 @@ import streamlit as st
 import zipfile
 import os
 import io
+import tempfile
 
 from decode_encode_png import png_decode, png_encode
 from decode_encode_wav import wav_decode, wav_encode
 from decode_encode_flac import flac_decode, flac_encode
+from decode_encode_mkv import mkv_encode, mkv_decode
+from encodeVideo import encode_video_with_cv2
+from decodeVideo import decode_video_with_cv2
 from encoder import encode_image
 from audio_spectrogram import plot_spectrogram
+
+
+def create_temp_file(mkv_file):
+    # Create a temporary file with a unique path
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mkv") as temp_file:
+        mkv_file.seek(0)
+        # Write the uploaded file's content to the temporary file
+        temp_file.write(mkv_file.read())
+        temp_file_path = temp_file.name
+        return temp_file_path
+
+def convert_cover_to_selected_format(cover_file, selected_format):
+    print(cover_file.name)
+    print(selected_format)
+    pass
 
 MAX_IMAGE_HEIGHT = 400
 MAX_TEXT_HEIGHT = 400
@@ -15,6 +34,8 @@ MAX_TEXT_HEIGHT = 400
 def encode_section_choose_files():
     # Use columns to make the layout cleaner
     col1, col2 = st.columns(2)
+    output_format = []
+    selected_format = None
 
     # File uploader for Payload
     with col1:
@@ -29,21 +50,27 @@ def encode_section_choose_files():
     # File uploader for Cover
     with col2:
         st.subheader("Cover")
-        cover_file = st.file_uploader("Drag and drop file here", type=["jpg", "png", "jpeg", "wav", "flac"], key="cover")
+        cover_file = st.file_uploader("Drag and drop file here", type=["jpg", "png", "jpeg", 'webp',
+                                                                       "wav", "flac",
+                                                                       "mkv", 'avi', 'mov'], key="cover")
         if cover_file:
-            # st.text_area("Type: ", cover_file.type)
+            # uncomment this line to see what your file type is
+            # st.write("Type: ", cover_file.type)
             if cover_file.type in ["image/jpg", "image/png", "image/jpeg", "image/webp"]:
+                output_format = ['PNG']
                 st.image(cover_file, width=MAX_IMAGE_HEIGHT)
-            elif cover_file.type == "audio/wav":
+            elif cover_file.type in ["audio/wav", "audio/flac"]:
+                output_format = ['FLAC', 'WAV']
                 spectrogram_image = plot_spectrogram(cover_file)
                 st.image(spectrogram_image, caption=f"Spectrogram")
                 st.audio(cover_file)
-            elif cover_file.type == "audio/flac":
-                spectrogram_image = plot_spectrogram(cover_file)
-                st.image(spectrogram_image, caption=f"Spectrogram")
-                st.audio(cover_file)
+            elif cover_file.type in ["video/x-matroska"]:
+                output_format = ['MKV', "AVI", "MOV"]  # Lossless formats for encoding
+                st.video(cover_file)
 
-    return cover_file, payload_file
+            selected_format = st.selectbox("Select the output format", output_format)
+
+    return cover_file, payload_file, selected_format
 
 
 def encode_section_single_encode(cover_file, payload_file, encode_slider):
@@ -60,6 +87,7 @@ def encode_section_single_encode(cover_file, payload_file, encode_slider):
 
     # Encode Button
     with col1:
+        #st.write(extension)
         if st.button("Encode using selected LSB", key="encode-button"):
             if extension in ["png", "webp"]:
                 output = png_encode(cover_file, payload_content, encode_slider)
@@ -67,25 +95,25 @@ def encode_section_single_encode(cover_file, payload_file, encode_slider):
                     # Save image to local storage to download the file
                     output_path = f"output/{filename}.{encode_slider}.{extension}"
                     output.save(output_path, loessless=True)
-                except Exception:
+                except Exception as e:
                     output_path = ""
-                    st.write("Cover is too small to store payload.")
+                    st.write(f"Error encoding PNG/WEBP file: {e}")
             elif extension in ["jpg", "jpeg"]:
                 output = encode_image(cover_file, payload_file, encode_slider)
                 try:
                     # Save image to local storage to download the file
                     output_path = f"output/{filename}.{encode_slider}.png"
                     output.save(output_path)
-                except Exception:
+                except Exception as e:
                     output_path = ""
-                    st.write("Cover is too small to store payload.")
+                    st.write(f"Error encoding JPEG file: {e}")
             elif extension in "flac":
                 try:
                     output_path = f"output/{filename}.{encode_slider}.flac"
                     flac_encode(cover_file, output_path, payload_content, encode_slider)
-                except Exception:
+                except Exception as e:
                     output_path = ""
-                    st.write("Cover is too small to store payload.")
+                    st.write(f"Error encoding FLAC file: {e}")
             elif extension == "wav":
                 try:
                     output_path = f"output/{filename}.{encode_slider}.wav"
@@ -93,6 +121,15 @@ def encode_section_single_encode(cover_file, payload_file, encode_slider):
                 except Exception as e:
                     output_path = ""
                     st.write(f"Error encoding WAV file: {e}")
+            elif extension == "x-matroska":
+                try:
+                    output_path = f"output/{filename}.{encode_slider}.mkv"
+                    mkv_path = create_temp_file(cover_file)
+                    mkv_encode(mkv_path, output_path, payload_content, encode_slider)
+                except Exception as e:
+                    output_path = ""
+                    st.write(f"Error encoding MKV file: {e}")
+
     # Download Button
     with col2:
         if output_path != "":
@@ -116,8 +153,10 @@ def encode_section_single_preview(cover_file, output, output_path):
             with col2:
                 st.subheader("Encoded")
                 st.image(output, width=MAX_IMAGE_HEIGHT)
-        if extension in ["wav", "flac"]:
+        elif extension in ["wav", "flac"]:
             st.audio(output_path)
+        elif extension in ['x-matroska']:
+            st.write("MKV playback not supported.")
 
 
 def encode_section_multi_encode(cover_file, payload_file):
@@ -190,11 +229,21 @@ def encode_section_multi_encode(cover_file, payload_file):
                         output_paths.append(output_path)
                     except Exception as e:
                         st.write("Cover is too small to store payload.")
+            elif extension == "x-matroska":
+                for i in range(1, 9):
+                    try:
+                        st.write(f"Encoding LSB {i}")
+                        output_path = f"output/{filename}.{i}.mkv"
+                        mkv_path = create_temp_file(cover_file)
+                        mkv_encode(mkv_path, output_path, payload_content, i)
+                        output_paths.append(output_path)
+                    except Exception as e:
+                        st.write("Cover is too small to store payload.")
 
     # Download button
     with col2:
         # Different file types have different render steps
-        if extension in ["png", "jpg", "jpeg", "wav", "flac"]:
+        if extension in ["png", "jpg", "jpeg", "wav", "flac", "x-matroska"]:
             if len(output_paths) > 0:
                 zip_buffer = io.BytesIO()
                 # Add each file (image or wav) to zip folder
@@ -237,6 +286,10 @@ def encode_section_multi_preview(cover_file, output_list, output_paths):
                 spectrogram_image = plot_spectrogram(output_paths[idx])
                 st.image(spectrogram_image, caption=f"Spectrogram {idx + 1}")
                 st.audio(output_paths[idx])
+        elif extension in ["x-matroska"]:
+            st.write("In-browser playback not supported")
+            st.write(f"Total files generated: {mult_encode_output_count}")
+
 
 
 def encode_section():
@@ -248,7 +301,8 @@ def encode_section():
 
     st.markdown("## Encoding")
 
-    cover_file, payload_file = encode_section_choose_files()
+    cover_file, payload_file, selected_format = encode_section_choose_files()
+
 
     # Slider for selecting the number of LSB bits
     st.markdown("### LSB Bit Selection")
@@ -271,7 +325,9 @@ def decode_section():
 
     with col1:
         st.subheader("Encoded File")
-        encoded_file = st.file_uploader("Encoded file to use.", type=["png", "wav", "flac"], key="encoded_file")
+        encoded_file = st.file_uploader("Encoded file to use.", type=["png", 'webp',
+                                                                      "wav", "flac",
+                                                                      "mkv"], key="encoded_file")
 
     with col2:
         if encoded_file and encoded_file.type in ["png", "webp"]:
@@ -283,18 +339,27 @@ def decode_section():
     if encoded_file:
         if st.button("Decode File with selected LSB", key='decode-button'):
             extension = encoded_file.type.split('/')[1]
+
             if extension in ["png", "webp"]:
                 decoded_content = png_decode(encoded_file, decode_slider)
                 st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
+
             elif extension == "wav":
                 try:
                     decoded_content = wav_decode(encoded_file, decode_slider)
                     st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
                 except Exception as e:
                     st.write(f"Error decoding WAV file: {e}")
+
             elif extension == "flac":
                 decoded_content = flac_decode(encoded_file, decode_slider)
                 st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
+
+            elif extension == "x-matroska":
+                mkv_path = create_temp_file(encoded_file)
+                decoded_content = mkv_decode(mkv_path, decode_slider)
+                st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
+
 
         if st.button("Decode File (guess LSB)", key='decode-button-guess'):
             extension = encoded_file.type.split('/')[1]
@@ -344,6 +409,22 @@ def decode_section():
                 except Exception as e:
                     st.write(f"Error decoding FLAC file: {e}")
 
+            elif extension == "x-matroska":
+                try:
+                    # Attempt decoding from 1 to 8 LSBs for WAV
+                    for lsb in range(1, 9):
+                        mkv_path = create_temp_file(encoded_file)
+                        decoded_content = mkv_decode(mkv_path, lsb)
+                        decoded_messages[lsb] = decoded_content
+                        encoded_file = io.BytesIO(encoded_file.getvalue())
+                        # Rank and display the results
+                    ranked_messages = rank_decoded_messages(decoded_messages)
+                    for bits, message, count in ranked_messages:
+                        st.write(f"Decoded using {bits} LSBs (Alphanumeric Count: {count})")
+                        st.text_area(f"Decoded Content (LSB {bits}):", message, height=MAX_TEXT_HEIGHT)
+                except Exception as e:
+                    st.write(f"Error decoding FLAC file: {e}")
+
 
 def rank_decoded_messages(decoded_messages):
     """Rank decoded messages based on the percentage of alphanumeric characters."""
@@ -353,7 +434,7 @@ def rank_decoded_messages(decoded_messages):
         # Calculate total length and alphanumeric count
         total_length = len(message)
         alphanumeric_count = sum(c.isalnum() for c in message)
-        
+
         # Calculate percentage, avoiding division by zero
         if total_length > 0:
             percentage = (alphanumeric_count / total_length) * 100

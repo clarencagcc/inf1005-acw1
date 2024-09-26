@@ -59,10 +59,9 @@ def mkv_encode(input_path, output_path, message, lsb_bits=1):
     if bytes_needed > frame_count * width * height:
         return False
 
-    curr_frame = 0
     pixel_count = 1
+    pixel_edited_count = 0
     while cap.isOpened():
-        curr_frame += 1
         ret, frame = cap.read()
         if not ret:
             break
@@ -91,7 +90,12 @@ def mkv_encode(input_path, output_path, message, lsb_bits=1):
                         blue = int(blue_binary, 2)
 
                     frame[i, j, 0] = blue
+
+                    if i in [1, 2] and j in [1, 2]:
+                        print(f"{frame[i, j, 0]}")
+
                     payload_index += lsb_bits
+                    pixel_edited_count += 1
 
         # write to output file
         out.write(frame)
@@ -106,6 +110,7 @@ def mkv_encode(input_path, output_path, message, lsb_bits=1):
     delete_file(temp_audio_path)
     delete_file(soundless_video_path)
 
+    print(f"Pixels Edited: {pixel_edited_count}")
     print("MKV Encoding End\b")
     return True
 
