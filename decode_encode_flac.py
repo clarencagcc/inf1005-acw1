@@ -98,7 +98,7 @@ if __name__ == "__main__":
     # Example usage
     input_flac = 'input/ohdeer.flac'
     output_flac = 'output/ohdeer.flac'
-    secret_message = get_text_from_file("payload/small.txt")
+    secret_message = get_text_from_file("payload/02_smallplus.txt")
 
     # Embed the secret message
     flac_encode(input_flac, output_flac, secret_message, lsb_bits=8)

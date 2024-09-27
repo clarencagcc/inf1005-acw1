@@ -170,7 +170,7 @@ def mkv_decode(input_path, lsb_bits=1):
 if __name__ == "__main__":
     input_path = "input/comeon.mkv"
     output_path = "output/comeon.mkv"
-    payload_path = "payload/small.txt"
+    payload_path = "payload/02_smallplus.txt"
     message = get_text_from_file(payload_path)
 
     mkv_encode(input_path, output_path, message, lsb_bits=8)

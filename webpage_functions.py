@@ -349,11 +349,24 @@ def encode_section_multi_preview(cover_file, output_list, output_paths, selected
     if mult_encode_output_count > 0:
         # Handle both images and WAV files in a row layout
         if selected_format in ["png"]:
-            cols = st.columns(mult_encode_output_count)
-            for idx, col in enumerate(cols):
-                with col:
-                    st.write(f"{8 - mult_encode_output_count + 1 + idx} LSB")
-                    st.image(output_list[idx], width=200)
+            col_count = 2
+            row_count = (int) (mult_encode_output_count / col_count)
+            output_idx = 0
+            for i in range(0, row_count):
+                cols = st.columns(col_count)
+                for col in cols:
+                    with col:
+                        if output_idx >= mult_encode_output_count:
+                            break
+                        st.write(f"{8 - mult_encode_output_count + 1 + output_idx} LSB")
+                        st.image(output_list[output_idx], width=MAX_IMAGE_HEIGHT)
+                        output_idx += 1
+            # cols = st.columns(mult_encode_output_count)
+            # for i in rows
+            # for idx, col in enumerate(cols):
+            #     with col:
+            #         st.write(f"{8 - mult_encode_output_count + 1 + idx} LSB")
+            #         st.image(output_list[idx], width=200)
         elif selected_format in ["wav", "flac"]:
             for idx in range(mult_encode_output_count):
                 st.write(8 - mult_encode_output_count + 1 + idx)
