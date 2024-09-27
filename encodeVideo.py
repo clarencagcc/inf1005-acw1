@@ -74,8 +74,9 @@ def encode_video_with_cv2(video_file, text_file, output_path, lsb_bits=1, select
     fps = video_capture.get(cv2.CAP_PROP_FPS)
 
     # Read the text payload
-    text_file.seek(0)
-    payload = text_file.read().decode('ascii', 'ignore') + '\x00'
+
+    with open(text_file, 'r',  encoding='utf-8') as f:
+        payload = f.read()
 
     text_index = 0
     total_chars = len(payload)
@@ -156,6 +157,7 @@ def avi_encode(video_file, text_file, output_path, lsb_bits=1):
         frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
         if text_index < total_chars:
+            print(f"{text_index}/{total_chars}")
             text_segment = payload[text_index:text_index + lsb_bits]
             text_index += lsb_bits
             print(f"Embedding '{text_segment}' into frame {frame_num}")
