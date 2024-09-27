@@ -1,3 +1,5 @@
+import math
+
 import streamlit as st
 import zipfile
 import os
@@ -350,7 +352,7 @@ def encode_section_multi_preview(cover_file, output_list, output_paths, selected
         # Handle both images and WAV files in a row layout
         if selected_format in ["png"]:
             col_count = 2
-            row_count = (int) (mult_encode_output_count / col_count)
+            row_count = math.ceil(mult_encode_output_count / col_count)
             output_idx = 0
             for i in range(0, row_count):
                 cols = st.columns(col_count)
