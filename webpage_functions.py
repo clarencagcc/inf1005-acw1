@@ -39,7 +39,6 @@ def convert_cover_to_selected_format(cover_file, selected_format):
     with tempfile.NamedTemporaryFile(delete=False, suffix=f".{selected_format}") as temp_output:
         output_path = temp_output.name
         temp_output.flush()
-
         try:
             # Handle image conversion
             if cover_file.type in ["image/jpg", "image/png", "image/jpeg", "image/webp"]:
@@ -56,12 +55,8 @@ def convert_cover_to_selected_format(cover_file, selected_format):
                 mp3_audio.export(output_path, format=selected_format)
 
             # Handle video conversion
-            elif cover_file.type in ["video/x-matroska", "video/avi", "video/quicktime", "video/mp4"]:
-                video_codec = ""
-                if cover_file.type in ["video/avi", "video/quicktime"]:
-                    video_codec = "ffv1"
-                else:
-                    video_codec = "libx264"
+            elif cover_file.type in ["video/x-matroska", "video/avi", "application/octet-stream", "video/mp4"]:
+                video_codec = "libx264"
 
                 tempfile_path = create_temp_file(cover_file, selected_format)
                 clip = mp.VideoFileClip(tempfile_path)
@@ -94,6 +89,7 @@ def encode_section_choose_files():
         cover_file = st.file_uploader("Drag and drop file here", type=["jpg", "png", "jpeg", 'webp',
                                                                        "wav", "flac", "mp3",
                                                                        "mkv", 'avi', 'mov', "mp4"], key="cover")
+
         if cover_file:
             # uncomment this line to see what your file type is
             if cover_file.type in ["image/jpg", "image/png", "image/jpeg", "image/webp"]:
@@ -106,7 +102,7 @@ def encode_section_choose_files():
                 st.image(spectrogram_image, caption=f"Spectrogram")
                 st.audio(cover_file)
 
-            elif cover_file.type in ["video/x-matroska", "video/avi", "video/quicktime", "video/mp4"]:
+            elif cover_file.type in ["video/x-matroska", "video/avi", "application/octet-stream", "video/mp4"]:
                 output_format = ['MKV', "AVI", "MOV"]  # Lossless formats for encoding
                 preview_file = convert_cover_to_selected_format(cover_file, "mp4")
                 st.video(preview_file)
@@ -363,12 +359,6 @@ def encode_section_multi_preview(cover_file, output_list, output_paths, selected
                         st.write(f"{8 - mult_encode_output_count + 1 + output_idx} LSB")
                         st.image(output_list[output_idx], width=MAX_IMAGE_HEIGHT)
                         output_idx += 1
-            # cols = st.columns(mult_encode_output_count)
-            # for i in rows
-            # for idx, col in enumerate(cols):
-            #     with col:
-            #         st.write(f"{8 - mult_encode_output_count + 1 + idx} LSB")
-            #         st.image(output_list[idx], width=200)
         elif selected_format in ["wav", "flac"]:
             for idx in range(mult_encode_output_count):
                 st.write(8 - mult_encode_output_count + 1 + idx)

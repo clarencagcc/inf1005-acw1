@@ -2,111 +2,109 @@ import cv2
 import os
 import shutil
 from PIL import Image
-from stegano import lsb
-from moviepy.editor import VideoFileClip
-from os.path import join
+
+message_delimiter = "\x00"  # End of message delimiter
+
+
+def bin_to_message(binary_data):
+    """
+    Converts binary data into a human-readable message.
+    Stops converting once the message delimiter is found.
+    """
+    message = ''
+    for i in range(0, len(binary_data), 8):
+        byte = "".join(binary_data[i:i + 8])
+        char = chr(int(byte, 2))
+        message += char
+        if char == message_delimiter:
+            break
+    return message
+
 
 def decode_video_with_cv2(video_file, lsb_bits=1, input_format="AVI"):
     """
-    Decodes a video or PNG sequence to extract the hidden text using LSB steganography.
-    Supports AVI and MOV formats by processing the video frame by frame to handle large file sizes efficiently.
+    Decodes a video to extract the hidden text using LSB steganography.
+    Handles lossless video formats like AVI (FFV1) or MOV (Apple Animation).
     """
     temp_dir = "temp_frames_decode"
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
 
-    # Handle PNG Sequence
-    if input_format == "PNG Sequence":
-        frame_directory = f"{video_file}_frames"
-        if not os.path.exists(frame_directory):
-            raise FileNotFoundError(f"The directory {frame_directory} was not found.")
-        
-        # Get all PNG files in the directory and process them
-        frame_paths = sorted([join(frame_directory, f) for f in os.listdir(frame_directory) if f.endswith(".png")])
-        if not frame_paths:
-            raise FileNotFoundError("No frames found in the specified PNG sequence directory.")
-        print(f"Decoding text from {len(frame_paths)} PNG frames...")
+    # Open the video capture if the input is a video file (e.g., AVI with FFV1)
+    video_capture = cv2.VideoCapture(video_file)
+    if not video_capture.isOpened():
+        raise Exception(f"Failed to open the video file {video_file}")
 
-    # Use MoviePy for decoding MOV files (Apple Animation codec)
-    elif input_format == "MOV":
-        print(f"Decoding MOV video {video_file} using MoviePy...")
+    frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(video_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    max_pixel = frame_count * width * height
 
-        # Open the MOV video with MoviePy
-        try:
-            video_clip = VideoFileClip(video_file)
-            frame_count = int(video_clip.fps * video_clip.duration)
-            frame_paths = []
-            
-            # Process each frame and save them temporarily as PNG
-            for frame_num in range(frame_count):
-                frame = video_clip.get_frame(frame_num / video_clip.fps)
-                frame_path = join(temp_dir, f"frame_{frame_num:05d}.png")
-                Image.fromarray(frame).save(frame_path)
-                frame_paths.append(frame_path)
+    print(f"Total Pixel Count = {max_pixel}")
+    print(f"Decoding text from {frame_count} frames of video...")
 
-            video_clip.reader.close()
-        except Exception as e:
-            raise Exception(f"Failed to decode MOV video: {e}")
+    binary_message = []
+    delimiter_found = False
 
-        if not frame_paths:
-            raise FileNotFoundError("No frames extracted from the MOV video.")
-
-    # For AVI and other video formats that OpenCV supports (unchanged logic)
-    else:
-        video_capture = cv2.VideoCapture(video_file)
-        if not video_capture.isOpened():
-            raise Exception(f"Failed to open the video file {video_file}")
-        
-        frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_paths = []
-
-        print(f"Decoding text from {frame_count} frames of video...")
-
-        frame_num = 0
-        while video_capture.isOpened():
-            ret, frame = video_capture.read()
-            if not ret:
-                break
-
-            frame_path = join(temp_dir, f"frame_{frame_num:05d}.png")
-            cv2.imwrite(frame_path, frame)
-            frame_paths.append(frame_path)
-            frame_num += 1
-
-        video_capture.release()
-
-        if not frame_paths:
-            raise FileNotFoundError("No frames extracted from the video.")
-
-    # Initialize variable to store the decoded message
-    decoded_message = ""
-
-    # Process each frame to reveal hidden text using Stegano LSB
-    for frame_num, frame_path in enumerate(frame_paths):
-        try:
-            if not os.path.exists(frame_path):
-                print(f"Frame {frame_num} does not exist. Skipping this frame.")
-                continue
-
-            frame_pil = Image.open(frame_path)
-            hidden_message = lsb.reveal(frame_pil)  # Use Stegano LSB to reveal the hidden message
-
-            if hidden_message:
-                decoded_message += hidden_message
-                print(f"Decoded from frame {frame_num}: {hidden_message}")
-            else:
-                print(f"No more hidden message found, stopping decoding at frame {frame_num}.")
-                break
-        except Exception as e:
-            print(f"Error decoding frame {frame_num}: {e}")
+    # Process each frame one by one to extract hidden text
+    for frame_num in range(frame_count):
+        ret, frame = video_capture.read()
+        if not ret:
             break
 
-    # Clean up the temporary directory if we extracted frames from a video
+        # Iterate over the pixels in the frame
+        for row in range(height):
+            for col in range(width):
+
+                green = frame[row, col, 1]
+                # Extract the least significant 'bits' from the pixel value using binary operations
+                bits_value = green & (2 ** lsb_bits - 1)
+
+                binary_value = format(bits_value, f'0{lsb_bits}b')
+                binary_message.extend(binary_value)
+
+                # Check if we've encountered the message delimiter
+                if ''.join(binary_message[-len(message_to_bin(message_delimiter)):]) == message_to_bin(message_delimiter):
+                    delimiter_found = True
+                    break
+
+            if delimiter_found:
+                print(f"No more hidden message found, stopping decoding at frame {frame_num}.")
+                break
+
+        if delimiter_found:
+            break
+
+    video_capture.release()
+
+    # Convert binary message to readable text
+    binary_message = ''.join(binary_message)
+    decoded_message = ''.join([chr(int(binary_message[i:i + 8], 2)) for i in range(0, len(binary_message), 8)])
+
+    # Return the decoded message up to the delimiter
+    decoded_message = decoded_message.split(message_delimiter)[0]
+
+    # Clean up temporary files if any
     shutil.rmtree(temp_dir)
 
     if decoded_message:
-        print(f"Decoded Message: {decoded_message}")
+        print(f"Message Decoded...")
+        print(f"Snippet: {decoded_message[:100]}")
     else:
         print("No message was decoded.")
 
     return decoded_message
+
+
+def message_to_bin(message: str):
+    """Convert a string to binary using utf-8 encoding."""
+    return ''.join(format(ord(c), '08b') for c in message)
+
+
+# Example usage:
+if __name__ == "__main__":
+    video_file = "output_video_with_audio.mov"  # Your video file path here
+    lsb_bits = 2  # Example LSB bits used during encoding (set as per your encoding)
+    
+    decoded_message = decode_video_with_cv2(video_file, lsb_bits=lsb_bits, input_format="MOV")
+    print("Decoded Message:", decoded_message)

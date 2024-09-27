@@ -26,6 +26,7 @@ def message_to_bin(message: str):
     """Convert a string to binary."""
     return ''.join(format(ord(c), '08b') for c in message)
 
+
 def mkv_encode(input_path, output_path, message, lsb_bits=1):
     print(f"\nEncoding to {output_path}")
     # Extract audio file from original video file using ffmpeg
@@ -147,6 +148,9 @@ def mkv_decode(input_path, lsb_bits=1):
 
         height, width, _ = frame.shape
         for i in range(height):
+            if done:
+                break
+
             for j in range(width):
                 # Get the blue channel value
                 blue = frame[i, j, 0]
@@ -155,6 +159,11 @@ def mkv_decode(input_path, lsb_bits=1):
 
                 binary_value = format(bits_value, f'0{lsb_bits}b')
                 binary_message.extend(binary_value)
+
+                # Check if we've encountered the message delimiter
+                if ''.join(binary_message[-len(message_to_bin(message_delimiter)):]) == message_to_bin(message_delimiter):
+                    done = True
+                    break
 
                 curr_pixel += 1
                 if curr_pixel % 1000000 == 0:
