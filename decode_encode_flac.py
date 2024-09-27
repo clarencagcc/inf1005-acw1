@@ -30,7 +30,7 @@ def flac_encode(input_path, output_path, message, lsb_bits):
     # Amount of data needed to hide the stuff you want to hide
     data_needed = math.ceil(len(binary_message) / lsb_bits)
     if data_needed > len(flat_data):
-        raise ValueError()
+        raise ValueError("Cover file does not have enough data.")
 
     # Modify the least significant bits in the audio data
     for i in range(len(flat_data)):

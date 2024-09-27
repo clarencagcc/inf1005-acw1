@@ -4,3 +4,7 @@ numpy~=2.0.0
 matplotlib~=3.9.2
 librosa~=0.10.2.post1
 soundfile~=0.12.1
+opencv-python~=4.10.0.84
+stegano~=0.11.4
+moviepy~=1.0.3
+pydub~=0.25.1

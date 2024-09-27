@@ -57,7 +57,7 @@ def mkv_encode(input_path, output_path, message, lsb_bits=1):
 
     bytes_needed = math.ceil(len(binary_message) / lsb_bits)
     if bytes_needed > frame_count * width * height:
-        return False
+        raise ValueError("Cover file does not have enough data.")
 
     pixel_count = 1
     pixel_edited_count = 0

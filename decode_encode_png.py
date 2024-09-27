@@ -33,7 +33,7 @@ def png_encode(image_path: str, message: str, lsb_bits=1):
     # Check if we have enough bytes to hide the message
     bytes_needed = math.ceil(len(binary_message) / lsb_bits)
     if bytes_needed > len(image.getdata()) * 3:
-        return False
+        raise ValueError("Cover file does not have enough data.")
 
     message_index = 0
     new_pixels = []
