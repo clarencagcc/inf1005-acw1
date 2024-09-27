@@ -73,9 +73,8 @@ def encode_video_with_cv2(video_file, text_file, output_path, lsb_bits=1, select
     frames = []
     fps = video_capture.get(cv2.CAP_PROP_FPS)
 
-    # Read the text payload
-
-    with open(text_file, 'r',  encoding='utf-8') as f:
+    # Read the text payload with utf-8 encoding
+    with open(text_file, 'r', encoding="utf-8") as f:
         payload = f.read()
 
     text_index = 0
@@ -141,8 +140,9 @@ def avi_encode(video_file, text_file, output_path, lsb_bits=1):
     frames = []
     fps = video_capture.get(cv2.CAP_PROP_FPS)
 
+    # Read the text payload with utf-8 encoding
     text_file.seek(0)
-    payload = text_file.read().decode('ascii', 'ignore') + '\x00'
+    payload = text_file.read().decode('utf-8', 'ignore') + '\x00'
 
     text_index = 0
     total_chars = len(payload)
@@ -180,7 +180,6 @@ def avi_encode(video_file, text_file, output_path, lsb_bits=1):
     video_clip = ImageSequenceClip([cv2.cvtColor(f, cv2.COLOR_BGR2RGB) for f in frames], fps=fps)
     original_clip = VideoFileClip(video_file)
 
-
     if original_clip.audio:
         print("Adding audio back to the encoded video...")
         video_with_audio = video_clip.set_audio(original_clip.audio)
@@ -197,18 +196,17 @@ def avi_encode(video_file, text_file, output_path, lsb_bits=1):
 
 def mov_encode(video_file, text_file, output_path, lsb_bits=1):
     """
-    Converts the video to a lossless format (AVI or MOV) and embeds text into the video frames using LSB steganography.
+    Converts the video to a lossless format (MOV) and embeds text into the video frames using LSB steganography.
     """
-    # Convert the video to the selected lossless format
 
-    # Open the converted video (AVI or MOV) and extract frames
+    # Open the converted video (MOV) and extract frames
     video_capture = cv2.VideoCapture(video_file)
     frames = []
     fps = video_capture.get(cv2.CAP_PROP_FPS)
 
-    # Read the text payload
+    # Read the text payload with utf-8 encoding
     text_file.seek(0)
-    payload = text_file.read().decode('ascii', 'ignore') + '\x00'
+    payload = text_file.read().decode('utf-8', 'ignore') + '\x00'
 
     text_index = 0
     total_chars = len(payload)
@@ -259,4 +257,3 @@ def mov_encode(video_file, text_file, output_path, lsb_bits=1):
     # If no audio, write the final video without audio
     video_clip.write_videofile(output_path, codec="png", preset="ultrafast")
     return output_path
-
