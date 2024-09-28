@@ -5,6 +5,7 @@ from moviepy.editor import VideoFileClip
 
 message_delimiter = "\x00"  # End of message delimiter
 
+
 def delete_file(input_path):
     # Delete the audio file
     try:
@@ -95,15 +96,15 @@ def embed_text_in_frame(frame, binary_message, payload_index, lsb_bits):
                     bits_to_encode = bits_to_encode.ljust(lsb_bits, '0')
 
                 # Modify the blue channel's LSBs to store the message
-                blue = frame[row, col, 0]
-                blue_binary = format(blue, '08b')
-                blue_binary = blue_binary[:-lsb_bits] + bits_to_encode
-                frame[row, col, 0] = int(blue_binary, 2)
+                green = frame[row, col, 1]
+                green_binary = format(green, '08b')
+                green_binary = green_binary[:-lsb_bits] + bits_to_encode
+                frame[row, col, 1] = int(green_binary, 2)
 
                 # Print the binary being encoded
-                if bit_index % 8 == 0:
-                    char_being_encoded = bin_to_message(binary_message[bit_index: bit_index + 8])
-                    print(f"Embedding '{char_being_encoded}' in frame pixel ({row}, {col})")
+                # if bit_index % 8 == 0:
+                #     char_being_encoded = bin_to_message(binary_message[bit_index: bit_index + 8])
+                #     print(f"Embedding '{char_being_encoded}' in frame pixel ({row}, {col})")
 
                 bit_index += lsb_bits
             else:

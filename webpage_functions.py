@@ -31,7 +31,6 @@ def create_temp_file(file, extension):
         temp_file_path = temp_file.name
         return temp_file_path
 
-
 def convert_cover_to_selected_format(cover_file, selected_format):
     cover_extension = cover_file.type.split('/')[-1]
     selected_format = selected_format.lower()
@@ -66,6 +65,27 @@ def convert_cover_to_selected_format(cover_file, selected_format):
         except Exception as e:
             st.error(f"convert_cover_to_selected_format() Error: {e}")
             return None
+
+
+def convert_to_mp4(filepath):
+    try:
+        # Create a temporary file to store the output
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_output:
+            output_path = temp_output.name  # Get the name of the temporary file
+
+        # Load the video file using MoviePy
+        clip = mp.VideoFileClip(filepath)
+
+        # Write the video to the output path in MP4 format
+        clip.write_videofile(output_path, codec="libx264", audio_codec="aac", preset="ultrafast")
+
+        # Clean up and close the clip
+        clip.close()
+
+        return output_path
+    except Exception as e:
+        print(f"Error converting file to MP4: {e}")
+        return None
 
 def encode_section_choose_files():
     # Use columns to make the layout cleaner
@@ -213,7 +233,8 @@ def encode_section_single_preview(cover_file, output, output_path, selected_form
         elif selected_format in ["wav", "flac"]:
             st.audio(output_path)
         elif selected_format in ['mkv', 'avi', 'mov']:
-            st.warning(f"In-browser playback for {selected_format} not supported.")
+            mp4_preview = convert_to_mp4(output_path)
+            st.video(mp4_preview)
 
 
 def encode_section_multi_encode(cover_file, payload_file, selected_format):
@@ -286,21 +307,21 @@ def encode_section_multi_encode(cover_file, payload_file, selected_format):
                         except Exception as e:
                             st.error(f"Error encoding FLAC file: {e}")
                 elif selected_format == "mkv":
-                    st.warning(f"In-browser playback for {selected_format} not supported.")
                     for i in range(1, 9):
                         try:
                             output_path = f"output/{filename}.{i}.mkv"
-                            mkv_encode(tempfile, output_path, payload_content, i)
+                            output = mkv_encode(tempfile, output_path, payload_content, i)
                             output_paths.append(output_path)
+                            output_list.append(output)
                         except Exception as e:
                             st.error(f"Error encoding MKV file: {e}")
                 elif selected_format == "avi":
-                    st.warning(f"In-browser playback for {selected_format} not supported.")
                     for i in range(1, 9):
                         try:
                             output_path = f"output/{filename}.{i}.avi"
-                            avi_encode(tempfile, payload_file, output_path, i)
+                            output = avi_encode(tempfile, payload_file, output_path, i)
                             output_paths.append(output_path)
+                            output_list.append(output)
                         except Exception as e:
                             output_path = ""
                             st.error(f"Error encoding AVI file: {e}")
@@ -308,8 +329,9 @@ def encode_section_multi_encode(cover_file, payload_file, selected_format):
                     for i in range(1, 9):
                         try:
                             output_path = f"output/{filename}.{i}.mov"
-                            mov_encode(tempfile, payload_file, output_path, i)
+                            output = mov_encode(tempfile, payload_file, output_path, i)
                             output_paths.append(output_path)
+                            output_list.append(output)
                         except Exception as e:
                             output_path = ""
                             st.error(f"Error encoding MOV file: {e}")
@@ -343,7 +365,7 @@ def encode_section_multi_encode(cover_file, payload_file, selected_format):
 def encode_section_multi_preview(cover_file, output_list, output_paths, selected_format):
     selected_format = selected_format.lower()
     # Create slider to switch between different images
-    mult_encode_output_count = len(output_list)
+    mult_encode_output_count = len(output_paths)
     if mult_encode_output_count > 0:
         # Handle both images and WAV files in a row layout
         if selected_format in ["png"]:
@@ -367,8 +389,19 @@ def encode_section_multi_preview(cover_file, output_list, output_paths, selected
                 st.image(spectrogram_image, caption=f"Spectrogram {idx + 1}")
                 st.audio(output_paths[idx])
         elif selected_format in ["mkv", 'avi', 'mov']:
-            st.warning("In-browser playback not supported")
-            st.write(f"Total files generated: {mult_encode_output_count}")
+            col_count = 2
+            row_count = math.ceil(mult_encode_output_count / col_count)
+            output_idx = 0
+            for i in range(0, row_count):
+                cols = st.columns(col_count)
+                for col in cols:
+                    with col:
+                        if output_idx >= mult_encode_output_count:
+                            break
+                        st.write(f"{8 - mult_encode_output_count + 1 + output_idx} LSB")
+                        mp4_preview = convert_to_mp4(output_paths[output_idx])
+                        st.video(mp4_preview)
+                        output_idx += 1
 
 
 def encode_section():
