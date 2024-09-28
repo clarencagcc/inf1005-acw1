@@ -1,31 +1,10 @@
 import cv2
-import os
 import math
 import subprocess
 
-message_delimiter = "\x00"
-
-def delete_file(input_path):
-    # Delete the audio file
-    try:
-        os.remove(input_path)
-        print(f"Temporary file {input_path} deleted successfully.")
-    except OSError as e:
-        print(f"Unable to delete {input_path}. Error: {e}")
-        pass
-
-
-def get_text_from_file(path: str):
-    try:
-        with(open(path, 'r', encoding='utf-8')) as file:
-            return file.read().encode('ascii', 'ignore').decode('ascii')
-    except FileNotFoundError:
-        return ""
-
-def message_to_bin(message: str):
-    """Convert a string to binary."""
-    return ''.join(format(ord(c), '08b') for c in message)
-
+from common import msg_to_bin, bin_to_msg, process_payload
+from common import delim_check
+from common import get_text_from_file, delete_file
 
 def mkv_encode(input_path, output_path, message, lsb_bits=1):
     print(f"\nEncoding to {output_path}")
@@ -40,8 +19,9 @@ def mkv_encode(input_path, output_path, message, lsb_bits=1):
     # Open video file
     cap = cv2.VideoCapture(input_path)
 
-    message += message_delimiter  # Use ### as a delimiter for the end of the message
-    binary_message = message_to_bin(message)
+    message = process_payload(message)
+    print(f"message {message[:100]}")
+    binary_message = msg_to_bin(message)
     binary_message_len = len(binary_message)
     payload_index = 0
 
@@ -92,9 +72,6 @@ def mkv_encode(input_path, output_path, message, lsb_bits=1):
 
                     frame[i, j, 0] = blue
 
-                    if i in [1, 2] and j in [1, 2]:
-                        print(f"{frame[i, j, 0]}")
-
                     payload_index += lsb_bits
                     pixel_edited_count += 1
 
@@ -116,17 +93,6 @@ def mkv_encode(input_path, output_path, message, lsb_bits=1):
     print(f"Pixels Edited: {pixel_edited_count}/{pixel_count}")
     print("MKV Encoding End\b")
     return True
-
-def bin_to_message(binary_data):
-    message = ''
-    for i in range(0, len(binary_data), 8):
-        byte = "".join(binary_data[i:i+8])
-        char = chr(int(byte, 2))
-        message += char
-
-        if char == message_delimiter:
-            break
-    return message
 
 def mkv_decode(input_path, lsb_bits=1):
     cap = cv2.VideoCapture(input_path)
@@ -161,7 +127,7 @@ def mkv_decode(input_path, lsb_bits=1):
                 binary_message.extend(binary_value)
 
                 # Check if we've encountered the message delimiter
-                if ''.join(binary_message[-len(message_to_bin(message_delimiter)):]) == message_to_bin(message_delimiter):
+                if delim_check(binary_message):
                     done = True
                     break
 
@@ -171,7 +137,7 @@ def mkv_decode(input_path, lsb_bits=1):
 
     cap.release()
     # Convert the binary message to readable text
-    final_message = bin_to_message(binary_message)
+    final_message = bin_to_msg(binary_message)
 
     return final_message
 

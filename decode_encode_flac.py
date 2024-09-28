@@ -2,30 +2,21 @@ import math
 
 import soundfile as sf
 
-message_delimiter = "\x00"
-
-def get_text_from_file(path: str):
-    try:
-        with(open(path, 'r', encoding='utf-8')) as file:
-            return file.read().encode('ascii', 'ignore').decode('ascii')
-    except FileNotFoundError:
-        return ""
+from common import msg_to_bin, bin_to_msg, process_payload
+from common import delim_check
+from common import get_text_from_file
 
 def flac_encode(input_path, output_path, message, lsb_bits):
     # Read the FLAC file
     data, samplerate = sf.read(input_path, dtype='int16')
 
+    message = process_payload(message)
+    binary_message = msg_to_bin(message)
+    binary_message_len = len(binary_message)
+    payload_idx = 0
+
     # Flatten audio data to a 1D array
     flat_data = data.flatten()
-
-    message += message_delimiter
-
-    # Convert the message into a binary string
-    binary_message = ''.join(format(ord(char), '08b') for char in message)
-
-    # Track the number of bits encoded
-    bits_encoded = 0
-    total_bits = len(binary_message)
 
     # Amount of data needed to hide the stuff you want to hide
     data_needed = math.ceil(len(binary_message) / lsb_bits)
@@ -34,17 +25,17 @@ def flac_encode(input_path, output_path, message, lsb_bits):
 
     # Modify the least significant bits in the audio data
     for i in range(len(flat_data)):
-        if bits_encoded >= total_bits:
+        if payload_idx >= binary_message_len:
             break
         # Extract the current 'lsb_bits' from the message
-        bits_to_encode = binary_message[bits_encoded: bits_encoded + lsb_bits]
+        bits_to_encode = binary_message[payload_idx: payload_idx + lsb_bits]
         bits_to_encode_int = int(bits_to_encode, 2)
 
         # Clear the LSBs of the sample and then embed the new bits using binary OR
         flat_data[i] = (flat_data[i] & ~(2**lsb_bits - 1)) | bits_to_encode_int
 
         # Update the number of bits encoded
-        bits_encoded += lsb_bits
+        payload_idx += lsb_bits
 
     # Reshape the data back to its original shape
     reshaped_data = flat_data.reshape(data.shape)
@@ -53,19 +44,6 @@ def flac_encode(input_path, output_path, message, lsb_bits):
     sf.write(output_path, reshaped_data, samplerate)
     return True
 
-
-def bin_to_message(binary_data: str):
-    """Convert binary string back to text."""
-    message = []
-    for i in range(0, len(binary_data), 8):
-        byte = binary_data[i:i + 8]
-        char = chr(int(byte, 2))
-        message.append(char)
-        if char == message_delimiter:
-            break
-    return ''.join(message).rstrip(message_delimiter)
-
-
 def flac_decode(input_path, lsb_bits):
     # Read the FLAC file
     data, samplerate = sf.read(input_path, dtype='int16')
@@ -73,25 +51,21 @@ def flac_decode(input_path, lsb_bits):
     # Flatten audio data to a 1D array
     flat_data = data.flatten()
 
-    binary_message = ''
-    bits_extracted = 0
+    binary_message = []
 
     # Extract the least significant bits from the audio data
     for sample in flat_data:
-
         # Extract the 'lsb_bits' from the sample
-        extracted_bits = sample & (2 ** lsb_bits - 1)
+        bits_value = sample & (2 ** lsb_bits - 1)
 
-        # Convert the extracted bits to a binary string
-        binary_message += f'{extracted_bits:0{lsb_bits}b}'
+        binary_value = format(bits_value, f'0{lsb_bits}b')
+        binary_message.extend(binary_value)
 
-        # Keep track of how many bits have been extracted
-        bits_extracted += lsb_bits
+        if delim_check(binary_message):
+            break
 
-    # Convert the binary string into the hidden message
-    decoded_message = bin_to_message(binary_message)
-
-    return decoded_message
+    final_message = bin_to_msg(binary_message)
+    return final_message
 
 
 if __name__ == "__main__":

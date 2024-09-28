@@ -1,19 +1,8 @@
 import math
-
 from PIL import Image
 
-message_delimiter = "\x00"
-
-def get_text_from_file(path: str):
-    try:
-        with(open(path, 'r', encoding='utf-8')) as file:
-            return file.read().encode('ascii', 'ignore').decode('ascii')
-    except FileNotFoundError:
-        return ""
-
-def message_to_bin(message: str):
-    """Convert a string to binary."""
-    return ''.join(format(ord(c), '08b') for c in message)
+from common import msg_to_bin, bin_to_msg, process_payload
+from common import delim_check
 
 def png_encode(image_path: str, message: str, lsb_bits=1):
     """Encodes a message into the PNG image."""
@@ -21,9 +10,11 @@ def png_encode(image_path: str, message: str, lsb_bits=1):
     # image must be in RGB mode  may not be in RGB
     image = image.convert('RGBA')
 
-    message += message_delimiter  # Use ### as a delimiter for the end of the message
-    binary_message = message_to_bin(message)
+    # Preprocess payload before insertion
+    message = process_payload(message)
+    binary_message = msg_to_bin(message)
     binary_message_len = len(binary_message)
+    payload_index = 0
 
     # Limits bits to update to only 8
     if lsb_bits > 8:
@@ -35,16 +26,15 @@ def png_encode(image_path: str, message: str, lsb_bits=1):
     if bytes_needed > len(image.getdata()) * 3:
         raise ValueError("Cover file does not have enough data.")
 
-    message_index = 0
     new_pixels = []
     for pixel in pixels:
-        if message_index < binary_message_len:
+        if payload_index < binary_message_len:
             new_pixel = list(pixel)
 
             # Replace the least significant bit of the red, green, or blue channel with message bits
             for i in range(3):  # Loop through RGB channels
-                if message_index < binary_message_len:
-                    bits_to_encode = binary_message[message_index: message_index + lsb_bits]
+                if payload_index < binary_message_len:
+                    bits_to_encode = binary_message[payload_index: payload_index + lsb_bits]
                     # If there are not enough characters in the binary
                     # add 0s from the left
                     if len(bits_to_encode) < lsb_bits:
@@ -60,7 +50,7 @@ def png_encode(image_path: str, message: str, lsb_bits=1):
                         # convert updated string back to int
                         new_pixel[i] = int(pixel_value_binary, 2)
 
-                    message_index += lsb_bits
+                    payload_index += lsb_bits
 
             new_pixels.append(tuple(new_pixel))
         else:
@@ -71,30 +61,29 @@ def png_encode(image_path: str, message: str, lsb_bits=1):
     encoded_image.putdata(new_pixels)
     return encoded_image
 
-def bin_to_message(binary_data: str):
-    """Convert binary string back to text."""
-    message = []
-    for i in range(0, len(binary_data), 8):
-        byte = binary_data[i:i + 8]
-        char = chr(int(byte, 2))
-        message.append(char)
-        if char == message_delimiter:
-            break
-    return ''.join(message).rstrip(message_delimiter)
 
 def png_decode(image_path: str, bits=1):
     """Extract the hidden message from the PNG image."""
     image = Image.open(image_path)
     image = image.convert('RGBA')
 
-    binary_message = ""
+    binary_message = []
+    done = False
     for pixel in image.getdata():
+        if done:
+            break
+
         for i in range(3):  # Extract from RGB channels
             # Extract the least significant 'bits' from the pixel value using binary operations
             bits_value = pixel[i] & (2 ** bits - 1)
-            binary_message += format(bits_value, f'0{bits}b')
+            binary_value = format(bits_value, f'0{bits}b')
+            binary_message.extend(binary_value)
 
-    hidden_message = bin_to_message(binary_message)
+            if delim_check(binary_message):
+                done = True
+                break
+
+    hidden_message = bin_to_msg(binary_message)
     return hidden_message
 
 
