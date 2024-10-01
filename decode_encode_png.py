@@ -62,7 +62,7 @@ def png_encode(image_path: str, message: str, lsb_bits=1):
     return encoded_image
 
 
-def png_decode(image_path: str, bits=1):
+def png_decode(image_path: str, lsb_bits=1):
     """Extract the hidden message from the PNG image."""
     image = Image.open(image_path)
     image = image.convert('RGBA')
@@ -75,8 +75,8 @@ def png_decode(image_path: str, bits=1):
 
         for i in range(3):  # Extract from RGB channels
             # Extract the least significant 'bits' from the pixel value using binary operations
-            bits_value = pixel[i] & (2 ** bits - 1)
-            binary_value = format(bits_value, f'0{bits}b')
+            bits_value = pixel[i] & (2 ** lsb_bits - 1)
+            binary_value = format(bits_value, f'0{lsb_bits}b')
             binary_message.extend(binary_value)
 
             if delim_check(binary_message):

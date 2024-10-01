@@ -66,7 +66,7 @@ def bin_to_msg(bin_data: list):
             break
         message.append(char)
     # Convert output list to a string and return it
-    return ''.join(message)
+    return ''.join(message).rstrip(msg_delim)
 
 def delim_check(bin_msg: list):
     # Get the final few characters of the binary message (as much as required)

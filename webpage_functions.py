@@ -8,6 +8,7 @@ import tempfile
 
 from decode_encode_png import png_decode, png_encode
 from decode_encode_wav import wav_decode, wav_encode
+from decode_encode_wav_payload import WAVPayload, isWavPayload
 from decode_encode_flac import flac_decode, flac_encode
 from decode_encode_mkv import mkv_encode, mkv_decode
 from encodeVideo import avi_encode, mov_encode
@@ -30,6 +31,20 @@ def create_temp_file(file, extension):
         temp_file.write(file.read())
         temp_file_path = temp_file.name
         return temp_file_path
+
+
+def create_temp_text_file(text: str):
+    # Create a temporary file
+    temp_file = tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='ascii', suffix='.txt')
+
+    # Write the string to the temporary file
+    temp_file.write(text)
+
+    # Save the file name and close the file
+    temp_file_path = temp_file.name
+    temp_file.close()
+
+    return temp_file
 
 def convert_cover_to_selected_format(cover_file, selected_format):
     cover_extension = cover_file.type.split('/')[-1]
@@ -96,12 +111,18 @@ def encode_section_choose_files():
     # File uploader for Payload
     with col1:
         st.subheader("Payload")
-        payload_file = st.file_uploader("Drag and drop file here", type=["txt"], key="payload")
-        if payload_file:
-            # Encode and decode because some characters (like em dash) aren't in the ascii table
-            payload_content = payload_file.read().decode('ascii', 'ignore')
+        payload_file = st.file_uploader("Drag and drop file here", type=["txt", "wav"], key="payload")
 
-            st.text_area("Complete File Content:", payload_content, height=MAX_TEXT_HEIGHT)
+        if payload_file:
+            if payload_file.type in ["text/plain"]:
+                # Encode and decode because some characters (like em dash) aren't in the ascii table
+                payload_content = payload_file.read().decode('ascii', 'ignore')
+                st.text_area("Complete File Content:", payload_content, height=MAX_TEXT_HEIGHT)
+            elif payload_file.type in ["audio/wav"]:
+                WavData = WAVPayload.readFromPath(payload_file)
+                payload_content = WavData.convertToPayload()
+                st.text_area("Complete File Content:", payload_content, height=MAX_TEXT_HEIGHT)
+                st.audio(payload_file)
 
     # File uploader for Cover
     with col2:
@@ -137,7 +158,16 @@ def encode_section_single_encode(cover_file, payload_file, encode_slider, select
 
     # Move the pointer back to the start of the file so that we can read it again from the beginning
     payload_file.seek(0)
-    payload_content = payload_file.read().decode('ascii', 'ignore')
+    payload_content = ""
+
+    if payload_file.type in ["text/plain"]:
+        # Encode and decode because some characters (like em dash) aren't in the ascii table
+        payload_content = payload_file.read().decode('ascii', 'ignore')
+    elif payload_file.type in ["audio/wav"]:
+        WavData = WAVPayload.readFromPath(payload_file)
+        payload_content = WavData.convertToPayload()
+    temp_text_file = create_temp_text_file(payload_content)
+
     filename = cover_file.name.split('.')[0]
 
     output_path = ""
@@ -163,7 +193,7 @@ def encode_section_single_encode(cover_file, payload_file, encode_slider, select
                         output_path = ""
                         st.error(f"Error encoding PNG file: {e}")
                 elif selected_format in ["jpg", "jpeg"]:
-                    output = encode_image(tempfile, payload_file, encode_slider)
+                    output = encode_image(tempfile, temp_text_file, encode_slider)
                     try:
                         # Save image to local storage to download the file
                         output_path = f"output/{filename}.{encode_slider}.png"
@@ -195,15 +225,14 @@ def encode_section_single_encode(cover_file, payload_file, encode_slider, select
                 elif selected_format == "avi":
                     try:
                         output_path = f"output/{filename}.{encode_slider}.avi"
-                        avi_encode(tempfile, payload_file, output_path, encode_slider)
-                        # encode_video_with_cv2(tempfile, payload_file, output_path, encode_slider, "AVI")
+                        avi_encode(tempfile, temp_text_file, output_path, encode_slider)
                     except Exception as e:
                         output_path = ""
                         st.error(f"Error encoding AVI file: {e}")
                 elif selected_format == "mov":
                     try:
                         output_path = f"output/{filename}.{encode_slider}.mov"
-                        mov_encode(tempfile, payload_file, output_path, encode_slider)
+                        mov_encode(tempfile, temp_text_file, output_path, encode_slider)
                     except Exception as e:
                         output_path = ""
                         st.error(f"Error encoding MOV file: {e}")
@@ -241,7 +270,14 @@ def encode_section_multi_encode(cover_file, payload_file, selected_format):
 
     # Move the pointer back to the start of the file so that we can read it again from the beginning
     payload_file.seek(0)
-    payload_content = payload_file.read().decode('ascii', 'ignore')
+    payload_content = ""
+    if payload_file.type in ["text/plain"]:
+        # Encode and decode because some characters (like em dash) aren't in the ascii table
+        payload_content = payload_file.read().decode('ascii', 'ignore')
+    elif payload_file.type in ["audio/wav"]:
+        WavData = WAVPayload.readFromPath(payload_file)
+        payload_content = WavData.convertToPayload()
+    temp_text_file = create_temp_text_file(payload_content)
     filename = cover_file.name.split('.')[0]
 
     # Buttons for downloading multiple encoded files
@@ -279,7 +315,7 @@ def encode_section_multi_encode(cover_file, payload_file, selected_format):
                 elif selected_format in ["jpg", "jpeg"]:
                     for i in range(1, 9):
                         try:
-                            output = encode_image(tempfile, payload_file, i)
+                            output = encode_image(tempfile, temp_text_file, i)
                             output_list.append(output)
                             # Save image to local storage to download the file
                             output_path = f"output/{filename}.{i}.png"
@@ -319,7 +355,7 @@ def encode_section_multi_encode(cover_file, payload_file, selected_format):
                     for i in range(1, 9):
                         try:
                             output_path = f"output/{filename}.{i}.avi"
-                            output = avi_encode(tempfile, payload_file, output_path, i)
+                            output = avi_encode(tempfile, temp_text_file, output_path, i)
                             output_paths.append(output_path)
                             output_list.append(output)
                         except Exception as e:
@@ -329,7 +365,7 @@ def encode_section_multi_encode(cover_file, payload_file, selected_format):
                     for i in range(1, 9):
                         try:
                             output_path = f"output/{filename}.{i}.mov"
-                            output = mov_encode(tempfile, payload_file, output_path, i)
+                            output = mov_encode(tempfile, temp_text_file, output_path, i)
                             output_paths.append(output_path)
                             output_list.append(output)
                         except Exception as e:
@@ -452,35 +488,39 @@ def decode_section():
             extension = encoded_file.type.split('/')[1]
 
             with st.spinner("Decoding..."):
-                if extension in ["png", "webp"]:
-                    decoded_content = png_decode(encoded_file, decode_slider)
-                    st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
+                try:
+                    if extension in ["png", "webp"]:
+                        decoded_content = png_decode(encoded_file, decode_slider)
 
-                elif extension == "wav":
-                    try:
+                    elif extension == "wav":
                         decoded_content = wav_decode(encoded_file, decode_slider)
-                        st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
-                    except Exception as e:
-                        st.write(f"Error decoding WAV file: {e}")
 
-                elif extension == "flac":
-                    decoded_content = flac_decode(encoded_file, decode_slider)
-                    st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
+                    elif extension == "flac":
+                        decoded_content = flac_decode(encoded_file, decode_slider)
 
-                elif extension == "x-matroska":
-                    mkv_path = create_temp_file(encoded_file, "mkv")
-                    decoded_content = mkv_decode(mkv_path, decode_slider)
-                    st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
+                    elif extension == "x-matroska":
+                        mkv_path = create_temp_file(encoded_file, "mkv")
+                        decoded_content = mkv_decode(mkv_path, decode_slider)
 
-                elif extension == "avi":
-                    file_path = create_temp_file(encoded_file, "avi")
-                    decoded_content = decode_video_with_cv2(file_path, decode_slider, "AVI")
-                    st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
+                    elif extension == "avi":
+                        file_path = create_temp_file(encoded_file, "avi")
+                        decoded_content = decode_video_with_cv2(file_path, decode_slider, "AVI")
 
-                elif extension == "octet-stream":
-                    file_path = create_temp_file(encoded_file, "mov")
-                    decoded_content = decode_video_with_cv2(file_path, decode_slider, "MOV")
-                    st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
+                    elif extension == "octet-stream":
+                        file_path = create_temp_file(encoded_file, "mov")
+                        decoded_content = decode_video_with_cv2(file_path, decode_slider, "MOV")
+                except Exception as e:
+                            st.write(f"Error decoding {extension} file: {e}")
+
+                if isWavPayload(decoded_content):
+                    decoded_wav_path = f"output/{encoded_file.name[:-4]}_decoded.wav"
+                    WAVPayload.readFromString(decoded_content, decoded_wav_path)
+                    st.audio(decoded_wav_path)
+                    st.download_button("Download Decoded WAV",
+                                       data=open(decoded_wav_path, 'rb').read(),
+                                       file_name=decoded_wav_path,
+                                       key='download-decoded-wav')
+                st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
 
         if st.button("Decode File (guess LSB)", key='decode-button-guess'):
 

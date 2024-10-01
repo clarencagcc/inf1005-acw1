@@ -1,7 +1,6 @@
 import cv2
 import os
 import shutil
-from PIL import Image
 
 message_delimiter = "\x00"  # End of message delimiter
 
