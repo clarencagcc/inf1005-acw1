@@ -54,7 +54,7 @@ class WAVPayload:
             lastByte = f"{frame},"
             output.extend(lastByte)
         # Remove the final comma from the written data (this is so when we split the sound data later, there won't be an 'empty' member.
-        output[-1] = lastByte[:-1]
+        output[-1] = ""
         output = "".join(output)
         return output
 

@@ -9,6 +9,7 @@ import tempfile
 from decode_encode_png import png_decode, png_encode
 from decode_encode_wav import wav_decode, wav_encode
 from decode_encode_wav_payload import WAVPayload, isWavPayload
+from decode_encode_png_payload import PNGPayload, isPngPayload
 from decode_encode_flac import flac_decode, flac_encode
 from decode_encode_mkv import mkv_encode, mkv_decode
 from encodeVideo import avi_encode, mov_encode
@@ -111,7 +112,7 @@ def encode_section_choose_files():
     # File uploader for Payload
     with col1:
         st.subheader("Payload")
-        payload_file = st.file_uploader("Drag and drop file here", type=["txt", "wav"], key="payload")
+        payload_file = st.file_uploader("Drag and drop file here", type=["txt", "wav", "png"], key="payload")
 
         if payload_file:
             if payload_file.type in ["text/plain"]:
@@ -121,8 +122,13 @@ def encode_section_choose_files():
             elif payload_file.type in ["audio/wav"]:
                 WavData = WAVPayload.readFromPath(payload_file)
                 payload_content = WavData.convertToPayload()
-                st.text_area("Complete File Content:", payload_content, height=MAX_TEXT_HEIGHT)
+                st.text_area("Complete File Content:", payload_content, height=25)
                 st.audio(payload_file)
+            elif payload_file.type in ["image/png"]:
+                PngData = PNGPayload.readFromPath(payload_file)
+                payload_content = PngData.convertToPayload()
+                st.text_area("Complete File Content:", payload_content, height=25)
+                st.image(payload_file)
 
     # File uploader for Cover
     with col2:
@@ -166,6 +172,9 @@ def encode_section_single_encode(cover_file, payload_file, encode_slider, select
     elif payload_file.type in ["audio/wav"]:
         WavData = WAVPayload.readFromPath(payload_file)
         payload_content = WavData.convertToPayload()
+    elif payload_file.type in ["image/png"]:
+        PNGData = PNGPayload.readFromPath(payload_file)
+        payload_content = PNGData.convertToPayload()
     temp_text_file = create_temp_text_file(payload_content)
     filename = cover_file.name.split('.')[0]
 
@@ -251,6 +260,9 @@ def encode_section_multi_encode(cover_file, payload_file, selected_format):
     elif payload_file.type in ["audio/wav"]:
         WavData = WAVPayload.readFromPath(payload_file)
         payload_content = WavData.convertToPayload()
+    elif payload_file.type in ["image/png"]:
+        PNGData = PNGPayload.readFromPath(payload_file)
+        payload_content = PNGData.convertToPayload()
     temp_text_file = create_temp_text_file(payload_content)
     filename = cover_file.name.split('.')[0]
 
@@ -468,7 +480,17 @@ def decode_section():
                                        data=open(decoded_wav_path, 'rb').read(),
                                        file_name=decoded_wav_path,
                                        key='download-decoded-wav')
-                st.text_area("Complete File Content:", decoded_content, height=MAX_TEXT_HEIGHT, key="decode-text-area")
+
+                if isPngPayload(decoded_content):
+                    decoded_img_path = f"output/{encoded_file.name[:-4]}_decoded.png"
+                    PNGPayload.readFromString(decoded_content, decoded_img_path)
+                    st.image(decoded_img_path)
+                    st.download_button("Download Decoded WAV",
+                                       data=open(decoded_img_path, 'rb').read(),
+                                       file_name=decoded_img_path,
+                                       key='download-decoded-img')
+
+                st.text_area("Complete File Content:", decoded_content, height=25, key="decode-text-area")
 
         if st.button("Decode File (guess LSB)", key='decode-button-guess'):
 
