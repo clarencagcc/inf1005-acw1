@@ -179,15 +179,12 @@ def encode_video_with_cv2(video_file, text_file, output_path, lsb_bits=1, select
 
     return output_file
 
-def avi_encode(video_file, text_file, output_path, lsb_bits=1):
+def avi_encode(video_file, payload_content, output_path, lsb_bits=1):
     """
     Converts the video to a lossless format (AVI or MOV) and embeds text into the video frames using LSB steganography.
     """
-    # Read the text payload (supports non-ASCII characters with UTF-8 encoding)
-    text_file.seek(0)
-    payload = text_file.read().decode('ascii', 'ignore') + '\x00'
 
-    binary_message = message_to_bin(payload)  # Convert the message to binary
+    binary_message = message_to_bin(payload_content)  # Convert the message to binary
     binary_message_len = len(binary_message)
     payload_index = 0  # Start embedding from the first bit of the binary message
 
@@ -238,14 +235,12 @@ def avi_encode(video_file, text_file, output_path, lsb_bits=1):
     return output_path
 
 
-def mov_encode(video_file, text_file, output_path, lsb_bits=1):
+def mov_encode(video_file, payload_content, output_path, lsb_bits=1):
     """
     Converts the video to a lossless format (MOV) and embeds text into the video frames using LSB steganography.
     """
-    text_file.seek(0)
-    payload = text_file.read().decode('ascii', 'ignore') + '\x00'
 
-    binary_message = message_to_bin(payload)  # Convert the message to binary
+    binary_message = message_to_bin(payload_content)  # Convert the message to binary
     binary_message_len = len(binary_message)
     payload_index = 0  # Start embedding from the first bit of the binary message
 

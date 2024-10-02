@@ -167,7 +167,6 @@ def encode_section_single_encode(cover_file, payload_file, encode_slider, select
         WavData = WAVPayload.readFromPath(payload_file)
         payload_content = WavData.convertToPayload()
     temp_text_file = create_temp_text_file(payload_content)
-
     filename = cover_file.name.split('.')[0]
 
     output_path = ""
@@ -182,60 +181,35 @@ def encode_section_single_encode(cover_file, payload_file, encode_slider, select
                 cover_file.seek(0)
                 tempfile = convert_cover_to_selected_format(cover_file, selected_format)
                 selected_format = selected_format.lower()
-
-                if selected_format in ["png", "webp"]:
-                    output = png_encode(tempfile, payload_content, encode_slider)
-                    try:
+                try:
+                    if selected_format in ["png", "webp"]:
+                        output = png_encode(tempfile, payload_content, encode_slider)
                         # Save image to local storage to download the file
                         output_path = f"output/{filename}.{encode_slider}.{selected_format}"
                         output.save(output_path, loseless=True)
-                    except Exception as e:
-                        output_path = ""
-                        st.error(f"Error encoding PNG file: {e}")
-                elif selected_format in ["jpg", "jpeg"]:
-                    output = encode_image(tempfile, temp_text_file, encode_slider)
-                    try:
+                    elif selected_format in ["jpg", "jpeg"]:
+                        output = encode_image(tempfile, temp_text_file, encode_slider)
                         # Save image to local storage to download the file
                         output_path = f"output/{filename}.{encode_slider}.png"
                         output.save(output_path)
-                    except Exception as e:
-                        output_path = ""
-                        st.error(f"Error encoding JPEG file: {e}")
-                elif selected_format in "flac":
-                    try:
+                    elif selected_format in "flac":
                         output_path = f"output/{filename}.{encode_slider}.flac"
                         flac_encode(tempfile, output_path, payload_content, encode_slider)
-                    except Exception as e:
-                        output_path = ""
-                        st.error(f"Error encoding FLAC file: {e}")
-                elif selected_format == "wav":
-                    try:
+                    elif selected_format == "wav":
                         output_path = f"output/{filename}.{encode_slider}.wav"
                         wav_encode(tempfile, payload_content, output_path, encode_slider)
-                    except Exception as e:
-                        output_path = ""
-                        st.error(f"Error encoding WAV file: {e}")
-                elif selected_format == "mkv":
-                    try:
+                    elif selected_format == "mkv":
                         output_path = f"output/{filename}.{encode_slider}.mkv"
                         mkv_encode(tempfile, output_path, payload_content, encode_slider)
-                    except Exception as e:
-                        output_path = ""
-                        st.error(f"Error encoding MKV file: {e}")
-                elif selected_format == "avi":
-                    try:
+                    elif selected_format == "avi":
                         output_path = f"output/{filename}.{encode_slider}.avi"
-                        avi_encode(tempfile, temp_text_file, output_path, encode_slider)
-                    except Exception as e:
-                        output_path = ""
-                        st.error(f"Error encoding AVI file: {e}")
-                elif selected_format == "mov":
-                    try:
+                        avi_encode(tempfile, payload_content, output_path, encode_slider)
+                    elif selected_format == "mov":
                         output_path = f"output/{filename}.{encode_slider}.mov"
-                        mov_encode(tempfile, temp_text_file, output_path, encode_slider)
-                    except Exception as e:
-                        output_path = ""
-                        st.error(f"Error encoding MOV file: {e}")
+                        mov_encode(tempfile, payload_content, output_path, encode_slider)
+                except Exception as e:
+                    output_path = ""
+                    st.error(f"Error encoding {selected_format} file: {e}")
 
     # Download Button
     with col2:
@@ -296,13 +270,13 @@ def encode_section_multi_encode(cover_file, payload_file, selected_format):
                 tempfile = convert_cover_to_selected_format(cover_file, selected_format)
                 selected_format = selected_format.lower()
 
-                # Encode the file for each LSB
-                # Save all those generated files to output folder
-                # store paths for each file
-                # use those paths to generate slideshow
-                if selected_format in ["png"]:
-                    for i in range(1, 9):
-                        try:
+                for i in range(1, 9):
+                    # Encode the file for each LSB
+                    # Save all those generated files to output folder
+                    # store paths for each file
+                    # Use those paths to generate slideshow
+                    try:
+                        if selected_format in ["png"]:
                             output = png_encode(tempfile, payload_content, i)
                             # png_encode will return bool during failure
                             output_list.append(output)
@@ -310,67 +284,41 @@ def encode_section_multi_encode(cover_file, payload_file, selected_format):
                             output_path = f"output/{filename}.{i}.png"
                             output.save(output_path)
                             output_paths.append(output_path)
-                        except Exception as e:
-                            st.error(f"Error encoding PNG file: {e}")
-                elif selected_format in ["jpg", "jpeg"]:
-                    for i in range(1, 9):
-                        try:
+                        elif selected_format in ["jpg", "jpeg"]:
                             output = encode_image(tempfile, temp_text_file, i)
                             output_list.append(output)
                             # Save image to local storage to download the file
                             output_path = f"output/{filename}.{i}.png"
                             output.save(output_path)
-                        except Exception as e:
-                            st.error(f"Error encoding JPEG file: {e}")
-                elif selected_format == "wav":
-                    for i in range(1, 9):
-                        # st.write("path done")
-                        cover_file = io.BytesIO(cover_file.getvalue())  # Reset file stream for each loop iteration
-                        try:
+                        elif selected_format == "wav":
+                            # st.write("path done")
+                            cover_file = io.BytesIO(cover_file.getvalue())  # Reset file stream for each loop iteration
                             output_path = f"output/{filename}.{i}.wav"
                             output = wav_encode(tempfile, payload_content, output_path, i)
                             output_list.append(output)
                             output_paths.append(output_path)
-                        except Exception as e:
-                            st.error(f"Error encoding WAV file: {e}")
-                elif selected_format == "flac":
-                    for i in range(1, 9):
-                        try:
+                        elif selected_format == "flac":
                             output_path = f"output/{filename}.{i}.flac"
                             output = flac_encode(tempfile, output_path, payload_content, i)
                             output_list.append(output)
                             output_paths.append(output_path)
-                        except Exception as e:
-                            st.error(f"Error encoding FLAC file: {e}")
-                elif selected_format == "mkv":
-                    for i in range(1, 9):
-                        try:
+                        elif selected_format == "mkv":
                             output_path = f"output/{filename}.{i}.mkv"
                             output = mkv_encode(tempfile, output_path, payload_content, i)
                             output_paths.append(output_path)
                             output_list.append(output)
-                        except Exception as e:
-                            st.error(f"Error encoding MKV file: {e}")
-                elif selected_format == "avi":
-                    for i in range(1, 9):
-                        try:
+                        elif selected_format == "avi":
                             output_path = f"output/{filename}.{i}.avi"
-                            output = avi_encode(tempfile, temp_text_file, output_path, i)
+                            output = avi_encode(tempfile, payload_content, output_path, i)
                             output_paths.append(output_path)
                             output_list.append(output)
-                        except Exception as e:
-                            output_path = ""
-                            st.error(f"Error encoding AVI file: {e}")
-                elif selected_format == "mov":
-                    for i in range(1, 9):
-                        try:
+                        elif selected_format == "mov":
                             output_path = f"output/{filename}.{i}.mov"
-                            output = mov_encode(tempfile, temp_text_file, output_path, i)
+                            output = mov_encode(tempfile, payload_content, output_path, i)
                             output_paths.append(output_path)
                             output_list.append(output)
-                        except Exception as e:
-                            output_path = ""
-                            st.error(f"Error encoding MOV file: {e}")
+                    except Exception as e:
+                        st.error(f"Error encoding {selected_format} file: {e}")
 
     # Download button
     with col2:
