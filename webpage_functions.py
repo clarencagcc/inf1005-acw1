@@ -51,6 +51,7 @@ def convert_cover_to_selected_format(cover_file, selected_format):
     cover_extension = cover_file.type.split('/')[-1]
     selected_format = selected_format.lower()
     # Create a temporary file to store the converted output
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=f".{selected_format}") as temp_output:
         output_path = temp_output.name
         temp_output.flush()
@@ -70,7 +71,7 @@ def convert_cover_to_selected_format(cover_file, selected_format):
                 mp3_audio.export(output_path, format=selected_format)
 
             # Handle video conversion
-            elif cover_file.type in ["video/x-matroska", "video/avi", "application/octet-stream", "video/mp4"]:
+            elif cover_file.type in ["video/x-matroska", "video/avi", "application/octet-stream", "video/mp4", "video/quicktime"]:
                 video_codec = "libx264"
 
                 tempfile_path = create_temp_file(cover_file, selected_format)
@@ -138,7 +139,6 @@ def encode_section_choose_files():
                                                                        "mkv", 'avi', 'mov', "mp4"], key="cover")
 
         if cover_file:
-            # uncomment this line to see what your file type is
             if cover_file.type in ["image/jpg", "image/png", "image/jpeg", "image/webp"]:
                 output_format = ['PNG']
                 st.image(cover_file, width=MAX_IMAGE_HEIGHT)
@@ -149,7 +149,7 @@ def encode_section_choose_files():
                 st.image(spectrogram_image, caption=f"Spectrogram")
                 st.audio(cover_file)
 
-            elif cover_file.type in ["video/x-matroska", "video/avi", "application/octet-stream", "video/mp4"]:
+            elif cover_file.type in ["video/x-matroska", "video/avi", "application/octet-stream", "video/mp4", "video/quicktime"]:
                 output_format = ['MKV', "AVI", "MOV"]  # Lossless formats for encoding
                 preview_file = convert_cover_to_selected_format(cover_file, "mp4")
                 st.video(preview_file)
