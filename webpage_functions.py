@@ -138,6 +138,7 @@ def encode_section_choose_files():
                                                                        "wav", "flac", "mp3",
                                                                        "mkv", 'avi', 'mov', "mp4"], key="cover")
 
+        # preview
         if cover_file:
             if cover_file.type in ["image/jpg", "image/png", "image/jpeg", "image/webp"]:
                 output_format = ['PNG']
@@ -243,14 +244,31 @@ def encode_section_single_preview(cover_file, output, output_path, selected_form
                 st.subheader("Encoded")
                 st.image(output, width=MAX_IMAGE_HEIGHT)
         elif selected_format in ["wav", "flac"]:
-            st.audio(output_path)
+            col0, col1 = st.columns(2)
+            with col0:
+                st.subheader("Original")
+                cover_file.seek(0)
+                spectrogram_image = plot_spectrogram(cover_file)
+                st.image(spectrogram_image, caption=f"Spectrogram")
+                st.audio(output_path)
+            with col1:
+                st.subheader("Encoded")
+                spectrogram_image = plot_spectrogram(output_path)
+                st.image(spectrogram_image, caption=f"Spectrogram")
+                st.audio(output_path)
         elif selected_format in ['mkv', 'avi', 'mov']:
-            mp4_preview = convert_to_mp4(output_path)
-            st.video(mp4_preview)
+            col0, col1, col2, col3 = st.columns([1, 1, 1, 1])
+            with col1:
+                st.subheader("Original")
+                mp4_preview = convert_cover_to_selected_format(cover_file, "mp4")
+                st.video(mp4_preview)
+            with col2:
+                st.subheader("Encoded")
+                mp4_preview = convert_to_mp4(output_path)
+                st.video(mp4_preview)
 
 
 def encode_section_multi_encode(cover_file, payload_file, selected_format):
-
     # Move the pointer back to the start of the file so that we can read it again from the beginning
     payload_file.seek(0)
     payload_content = ""
@@ -367,7 +385,12 @@ def encode_section_multi_preview(cover_file, output_list, output_paths, selected
         if selected_format in ["png"]:
             col_count = 2
             row_count = math.ceil(mult_encode_output_count / col_count)
-            output_idx = 0
+            _, col2, _ = st.columns(3)
+            with col2:
+                st.header("Original")
+                st.image(cover_file, width=MAX_IMAGE_HEIGHT)
+                output_idx = 0
+            st.header("Encoded")
             for i in range(0, row_count):
                 cols = st.columns(col_count)
                 for col in cols:
@@ -378,16 +401,40 @@ def encode_section_multi_preview(cover_file, output_list, output_paths, selected
                         st.image(output_list[output_idx], width=MAX_IMAGE_HEIGHT)
                         output_idx += 1
         elif selected_format in ["wav", "flac"]:
-            for idx in range(mult_encode_output_count):
-                st.write(8 - mult_encode_output_count + 1 + idx)
-                # For WAV files, plot and display the spectrogram
-                spectrogram_image = plot_spectrogram(output_paths[idx])
-                st.image(spectrogram_image, caption=f"Spectrogram {idx + 1}")
-                st.audio(output_paths[idx])
+            _, col2, _ = st.columns(3)
+            with col2:
+                st.header("Original")
+                cover_file.seek(0)
+                spectrogram_image = plot_spectrogram(cover_file)
+                st.image(spectrogram_image, caption=f"Spectrogram")
+                st.audio(cover_file)
+            st.header("Encoded")
+
+            col_count = 2
+            row_count = math.ceil(mult_encode_output_count / col_count)
+            output_idx = 0
+            for idx in range(0, row_count):
+                cols = st.columns(col_count)
+                for col in cols:
+                    with col:
+                        if output_idx >= mult_encode_output_count:
+                            break
+                        st.write(f"{8 - mult_encode_output_count + 1 + output_idx} LSB")
+                        # For WAV files, plot and display the spectrogram
+                        spectrogram_image = plot_spectrogram(output_paths[idx])
+                        st.image(spectrogram_image, caption=f"Spectrogram {idx + 1}")
+                        st.audio(output_paths[idx])
+                        idx += 1
         elif selected_format in ["mkv", 'avi', 'mov']:
             col_count = 2
             row_count = math.ceil(mult_encode_output_count / col_count)
             output_idx = 0
+            _, col2, _ = st.columns(3)
+            with col2:
+                st.header("Original")
+                preview_file = convert_cover_to_selected_format(cover_file, "mp4")
+                st.video(preview_file)
+            st.header("Encoded")
             for i in range(0, row_count):
                 cols = st.columns(col_count)
                 for col in cols:
@@ -485,7 +532,7 @@ def decode_section():
                     decoded_img_path = f"output/{encoded_file.name[:-4]}_decoded.png"
                     PNGPayload.readFromString(decoded_content, decoded_img_path)
                     st.image(decoded_img_path)
-                    st.download_button("Download Decoded WAV",
+                    st.download_button("Download Decoded PNG",
                                        data=open(decoded_img_path, 'rb').read(),
                                        file_name=decoded_img_path,
                                        key='download-decoded-img')
