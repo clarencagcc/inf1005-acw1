@@ -1,5 +1,5 @@
-streamlit~=1.38.0
-pillow~=10.4.0
+streamlit
+pillow
 numpy~=2.0.0
 matplotlib~=3.9.2
 librosa~=0.10.2.post1
